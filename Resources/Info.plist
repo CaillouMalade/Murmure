@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>com.murmure.app</string>
+    <key>CFBundleName</key><string>Murmure</string>
+    <key>CFBundleDisplayName</key><string>Murmure</string>
+    <key>CFBundleExecutable</key><string>Murmure</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleVersion</key><string>1000</string>
+    <key>LSMinimumSystemVersion</key><string>15.0</string>
+    <key>LSUIElement</key><true/>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSMicrophoneUsageDescription</key><string>Murmure records your microphone only when you start a recording.</string>
+    <key>NSScreenCaptureUsageDescription</key><string>Murmure captures Mac audio when you select Mac audio or Microphone + Mac audio. It does not save screen video.</string>
+</dict>
+</plist>

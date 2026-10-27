@@ -1,0 +1,37 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Worker protocol and failure tests (no models or credentials)
+        run: python3 -m unittest discover -s worker/tests -v
+      - name: Native core tests
+        run: swift test
+      - name: Build universal Mac app
+        run: bash scripts/build-app.sh
+      - name: Inspect packaged executable
+        run: |
+          lipo -archs dist/Murmure.app/Contents/MacOS/Murmure
+          du -sh dist/Murmure.app
+      - name: Upload versioned Mac build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Murmure-macOS-${{ github.sha }}
+          path: dist/Murmure-*-macOS.zip
+          if-no-files-found: error
+          retention-days: 30

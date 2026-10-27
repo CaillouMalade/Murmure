@@ -1,0 +1,13 @@
+.build/
+.swiftpm/
+dist/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+*.xcuserstate
+.env
+*.m4a
+*.wav
+*.caf
+*.mov

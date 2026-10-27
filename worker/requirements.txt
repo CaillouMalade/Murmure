@@ -1,0 +1,2 @@
+# Models are downloaded on the processing computer at first use, not in the app.
+faster-whisper>=1.2.1,<2
