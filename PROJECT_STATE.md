@@ -16,7 +16,7 @@ Results checked on launch, wake and user interaction. No immediate-result promis
 
 ## Verified state
 
-Initial source implemented. Local worker tests and GitHub macOS build have not yet been run. No model has been downloaded or executed, no user recording captured, no SSH server/model environment configured, and no real Mac UX/energy tests performed. Do not claim those passed.
+All 9 worker tests passed on Windows and in the first macOS workflow. The first native compile identified a main-actor entrypoint issue; fixed with an explicit main-actor application entrypoint and delegate lifetime. Also replaced the deprecated export callback with the macOS 15 async export API. The corrected native build is pending. No model has been downloaded or executed, no user recording captured, no SSH server/model environment configured, and no real Mac UX/energy tests performed. Do not claim those passed.
 
 ## Current next steps
 

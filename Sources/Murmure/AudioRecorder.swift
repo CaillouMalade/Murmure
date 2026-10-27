@@ -146,13 +146,8 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
         guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetAppleM4A) else {
             throw MurmureError.message("Could not prepare the combined recording.")
         }
-        exporter.audioMix = mix; exporter.outputURL = output; exporter.outputFileType = .m4a
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            exporter.exportAsynchronously {
-                if exporter.status == .completed { continuation.resume() }
-                else { continuation.resume(throwing: exporter.error ?? MurmureError.message("Could not save the combined recording.")) }
-            }
-        }
+        exporter.audioMix = mix
+        try await exporter.export(to: output, as: .m4a)
         return output
     }
 
