@@ -23,6 +23,8 @@ final class SettingsWindow: NSWindowController {
         device.addItems(withTitles: ["auto", "cpu", "cuda"]); device.selectItem(withTitle: settings.options.device)
         host.stringValue = settings.remote.host; host.placeholderString = "e.g. g14 (from ~/.ssh/config)"
         python.stringValue = settings.remote.python; script.stringValue = settings.remote.script; root.stringValue = settings.remote.root
+        python.placeholderString = "e.g. C:/Murmure/.venv/Scripts/python.exe"
+        script.placeholderString = "e.g. C:/Murmure/worker/murmure_worker.py"
         localPython.stringValue = settings.localPython; localPython.placeholderString = "/Users/you/Murmure/.venv/bin/python"
         folder.stringValue = settings.outputFolder; folder.placeholderString = "Default: ~/Documents/Murmure"
         model.stringValue = settings.options.model; language.stringValue = settings.options.language; language.placeholderString = "Automatic, or en / fr / de…"
@@ -81,7 +83,15 @@ final class SettingsWindow: NSWindowController {
             defer { testButton.isEnabled = true }
             do {
                 let result = try await WorkerClient(endpoint: value.remote, localPython: value.localPython, localRoot: localRoot).request(op: "probe")
-                feedback.stringValue = "Connected to worker \(result.version ?? "unknown version"). Models load only when a job runs."
+                let version = result.version ?? "unknown version"
+                if result.transcriptionInstalled == false {
+                    feedback.stringValue = "Connected to worker \(version), but transcription is not installed in that Python environment. Install worker/requirements.txt there."
+                } else if value.options.diarization && result.diarizationInstalled == false {
+                    feedback.stringValue = "Connected to worker \(version), but speaker labels need worker/requirements-diarization.txt and model access."
+                } else {
+                    let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+                    feedback.stringValue = "Connected to worker \(version)." + (version == current ? " Model weights are checked when a job runs." : " Update the remote worker to the app's version for the latest fixes.")
+                }
             } catch { feedback.stringValue = error.localizedDescription }
         }
     }

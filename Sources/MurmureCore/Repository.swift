@@ -32,9 +32,20 @@ public final class JobRepository {
         case .recording, .preparing:
             recovered.state = .interrupted; recovered.message = "Recording stopped before audio was finalized. Original capture files are kept in its folder."
         case .uploading:
-            recovered.state = .remote; recovered.message = "Transfer was interrupted. Check the remote job before retrying."
+            recovered.state = job.endpoint == nil ? .local : .remote
+            recovered.message = "Transfer was interrupted. Check the worker before retrying."
+        case .remote where job.endpoint == nil:
+            // V1 recovery could label an interrupted local transfer as remote.
+            recovered.state = .local
         default: break
         }
         return recovered
+    }
+    public var separateLocalWorkerRoot: URL {
+        root.deletingLastPathComponent().appendingPathComponent("LocalWorker", isDirectory: true)
+    }
+    public func localWorkerRoot(for job: RecordingJob) -> URL {
+        // V1 local jobs must still be checked in the old location.
+        job.localWorkerRoot.map { URL(fileURLWithPath: $0) } ?? root
     }
 }

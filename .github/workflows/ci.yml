@@ -13,6 +13,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-worker:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Worker protocol and real Windows process lifetime
+        run: python -m unittest discover -s worker/tests -v
   macos:
     runs-on: macos-15
     timeout-minutes: 15

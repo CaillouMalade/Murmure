@@ -1,0 +1,24 @@
+# COS review of v0.1.0 and v2 decisions
+
+COS reviewed source commit `881f1134f835370abaf8f9449215bc7b3bc9077a` read-only and returned their review on 2026-10-27. They found the scope appropriate: a small native app, no idle polling timer and explicit local fallback. Their priorities were result delivery and reliable jobs on the Windows processing computer. They did not run models or native capture.
+
+## Accepted for 0.2.0
+
+1. **Windows worker lifetime.** COS correctly identified the missing `CREATE_BREAKAWAY_FROM_JOB` flag in the detached launch. V2 requests it alongside detached-process/new-process-group flags. Microsoft's [job-object documentation](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects) explains the requirement. The [OpenSSH maintainer discussion and fix](https://github.com/PowerShell/Win32-OpenSSH/issues/1032) show that permitting explicit breakaway was implemented in 2018; assuming all current Windows OpenSSH hosts forbid it would be inaccurate. A host that still refuses gets a clear failure and keeps the recording. V2 does not install scheduled tasks, change a job object's policy or substitute `Start-Process`, which [does not ensure a remote child outlives its session](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process).
+2. **Stalled states.** Status records gain a timestamp. After a two-minute startup grace, an active-looking job with no live OS lock becomes a retryable failure. The lock stays held while a real worker waits for the model slot, preventing a long queue from being mistaken for a crash. Checks happen only on requests, never a periodic heartbeat. A duplicate runner cannot overwrite another runner's state.
+3. **Visible results.** New transcripts remain unread until opened. The menu-bar icon and job row show that a result is ready, and a user-initiated Check results opens the latest unread transcript in its Copy window. Passive launch/wake checks mark results without stealing focus. Checks begin before the menu popup and update visible rows/check feedback; no new notification permission or polling is added. Actual menu-tracking interaction remains a Mac verification item.
+4. **Separate local storage.** New local jobs use `Application Support/Murmure/LocalWorker`, apart from `Recordings`. The worker retains its own input copy. V1 local jobs still check their original location, using optional metadata rather than moving/deleting user recordings.
+5. **Recovery and context.** Interrupted local uploads recover as local; the V1 remote-label-with-no-endpoint mistake is also corrected. Menu rows include the audio source and approximate captured duration. V1 metadata remains readable.
+6. **Alerts and empty attempts.** User-facing alerts activate the app. A permission-denied attempt with no capture no longer creates a failed recording row. Partially captured files remain preserved. Stream shutdown also clears capture references even if stop fails.
+7. **Setup and unavailable hosts.** New settings ask for explicit remote executable/script paths, with Windows venv examples. Connection tests distinguish a reachable worker from missing transcription/diarization dependencies. One failed status request suppresses further requests to that same endpoint during the current check.
+
+## Deferred or rejected
+
+- Do not automatically create a Windows Task Scheduler fallback or weaken detachment/SSH checks. That would add host setup and obscure a failed lifetime guarantee. A separately configured host remains a user's later setup choice.
+- Do not tune microphone/system timing from assumptions. A real-Mac clap test is still required; no improved alignment accuracy is claimed.
+- Do not add recording cleanup, a notification framework, speaker naming, hotkeys, a server, auto-updates or a new model manager. These were not needed for this review and would expand the app.
+- Do not equate CUDA-device discovery with a complete CUDA/cuDNN installation. Auto chooses CUDA when CTranslate2 reports a CUDA device; the model runtime must still be installed correctly or the job reports failure.
+
+## Verification boundary
+
+All 18 worker tests passed locally on Windows after these changes, including two real OS job-object tests: a detached child outlived a killed session-like parent, and a session that forbade breakaway was rejected without fallback. This is a controlled process-lifetime test, not an actual SSH authentication/inference test. A live `localhost` SSH check was refused by strict host verification because no trusted ED25519 entry exists; no host key was accepted or SSH configuration changed. macOS V2 CI is pending at this document's first commit. Real audio capture, model inference, speaker quality, Mac UI and idle memory/energy are still unverified.

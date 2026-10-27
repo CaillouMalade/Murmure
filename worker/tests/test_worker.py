@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -91,6 +92,61 @@ class WorkerTests(unittest.TestCase):
             worker.validated_options({"diarization": "false"})
         with self.assertRaises(worker.WorkerError):
             worker.submit(self.root, {**self.header(), "bytes": True}, io.BytesIO(b"a"))
+
+    def make_stale(self, state="queued"):
+        directory = worker.job_path(self.root, self.identifier)
+        directory.mkdir(exist_ok=True)
+        worker.atomic_json(directory / "status.json", {"id": self.identifier, "state": state,
+                           "updatedAt": time.time() - worker.STALE_SECONDS - 10})
+        return directory
+
+    def test_dead_worker_becomes_retryable_and_never_restarts_itself(self):
+        directory = self.make_stale()
+        with patch.object(worker, "start_detached") as launch:
+            result = worker.status(self.root, self.identifier)
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("stopped before finishing", result["error"])
+        launch.assert_not_called()
+        self.assertTrue((directory / "status.json").is_file())
+
+    def test_live_worker_is_not_stalled_even_after_a_long_queue_wait(self):
+        directory = self.make_stale()
+        with worker.file_lock(directory / "run.lock"):
+            self.assertEqual(worker.status(self.root, self.identifier)["state"], "queued")
+
+    def test_partial_upload_stall_uses_the_submission_lock(self):
+        directory = self.make_stale("receiving")
+        with worker.file_lock(directory / "submit.lock"):
+            self.assertEqual(worker.status(self.root, self.identifier)["state"], "receiving")
+        self.assertEqual(worker.status(self.root, self.identifier)["state"], "failed")
+
+    def test_duplicate_runner_cannot_mark_the_real_runner_as_failed(self):
+        directory = self.make_stale("running")
+        with worker.file_lock(directory / "run.lock"), patch.object(worker, "transcribe") as infer:
+            worker.run_job(self.root, self.identifier)
+            self.assertEqual(worker.status(self.root, self.identifier)["state"], "running")
+            infer.assert_not_called()
+
+    def test_windows_detach_requests_breakaway_without_changing_posix(self):
+        self.assertEqual(worker.detached_process_options("win32")["creationflags"] & 0x01000000, 0x01000000)
+        self.assertEqual(worker.detached_process_options("darwin"), {"start_new_session": True})
+
+    def test_windows_refusal_is_clear_and_does_not_retry_a_weaker_launch(self):
+        error = OSError("access denied")
+        error.winerror = 5
+        with patch.object(worker.sys, "platform", "win32"), patch.object(worker.subprocess, "Popen", side_effect=error) as launch:
+            with self.assertRaisesRegex(worker.WorkerError, "Windows refused"):
+                worker.spawn_detached(["python", "worker.py"], io.BytesIO())
+        launch.assert_called_once()
+
+    def test_probe_reports_dependencies_without_importing_the_model_runtime(self):
+        request = {"op": "probe", "root": str(self.root)}
+        with patch.object(worker, "module_available", return_value=False), patch.object(worker, "transcribe") as infer:
+            result = worker.rpc(io.BytesIO(json.dumps(request).encode() + b"\n"))
+        self.assertEqual(result["protocolVersion"], 1)
+        self.assertFalse(result["transcriptionInstalled"])
+        self.assertFalse(result["diarizationInstalled"])
+        infer.assert_not_called()
 
 
 if __name__ == "__main__":

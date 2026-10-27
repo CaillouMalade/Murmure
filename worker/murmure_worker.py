@@ -19,13 +19,18 @@ import time
 from typing import BinaryIO
 import uuid
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 MAX_HEADER = 16_384
 MAX_AUDIO_BYTES = 16 * 1024**3
 CHUNK = 64 * 1024
+STALE_SECONDS = 120
 
 
 class WorkerError(Exception):
+    pass
+
+
+class LockBusy(WorkerError):
     pass
 
 
@@ -40,6 +45,14 @@ def atomic_json(path: Path, value: dict) -> None:
 
 def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_status(directory: Path, state: str, **fields) -> None:
+    atomic_json(directory / "status.json", {"id": directory.name, "state": state, "updatedAt": time.time(), **fields})
+
+
+def failure_message(error: Exception) -> str:
+    return str(error) if isinstance(error, WorkerError) else f"Transcription failed ({type(error).__name__}). Check the model, dependencies and any required model access on the processing computer."
 
 
 def job_path(root: Path, identifier: str) -> Path:
@@ -90,7 +103,7 @@ def file_lock(path: Path, *, blocking: bool = True):
                     break
                 except OSError:
                     if not blocking:
-                        raise WorkerError("This recording is already being submitted.")
+                        raise LockBusy("This recording is already being handled by another worker.")
                     time.sleep(1)  # Only queued workers on the processing computer wait.
             try:
                 yield
@@ -101,7 +114,7 @@ def file_lock(path: Path, *, blocking: bool = True):
             try:
                 fcntl.flock(handle, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
             except BlockingIOError as error:
-                raise WorkerError("This recording is already being submitted.") from error
+                raise LockBusy("This recording is already being handled by another worker.") from error
             try:
                 yield
             finally:
@@ -118,27 +131,54 @@ def copy_exact(source: BinaryIO, destination: BinaryIO, size: int) -> None:
         remaining -= len(block)
 
 
-def status(root: Path, identifier: str) -> dict:
+def status(root: Path, identifier: str, *, check_stalled: bool = True) -> dict:
     directory = job_path(root, identifier)
     path = directory / "status.json"
     if not path.exists():
         return {"state": "missing", "id": identifier}
     result = read_json(path)
+    if check_stalled and result["state"] in ("receiving", "queued", "running"):
+        def stale(value):
+            return time.time() - value.get("updatedAt", path.stat().st_mtime) > STALE_SECONDS
+        if stale(result):
+            lock_name = "submit.lock" if result["state"] == "receiving" else "run.lock"
+            try:
+                with file_lock(directory / lock_name, blocking=False):
+                    # Re-read under the lock, so a late result cannot be overwritten.
+                    current = read_json(path)
+                    if current["state"] == result["state"] and stale(current):
+                        write_status(directory, "failed", error="The worker stopped before finishing. The recording is kept; retry after checking the processing computer.")
+                    result = read_json(path)
+            except LockBusy:
+                pass  # A real live/queued process holds its lock, even for a long job.
     if result["state"] == "completed":
         result["transcript"] = read_json(directory / "transcript.json")
     return result
 
 
+def detached_process_options(platform: str | None = None) -> dict:
+    if (platform or sys.platform) == "win32":
+        # Win32 constants: DETACHED_PROCESS, CREATE_NEW_PROCESS_GROUP,
+        # CREATE_BREAKAWAY_FROM_JOB. No silent fallback into the SSH job object.
+        return {"creationflags": 0x00000008 | 0x00000200 | 0x01000000}
+    return {"start_new_session": True}
+
+
+def spawn_detached(arguments: list[str], log: BinaryIO) -> subprocess.Popen:
+    try:
+        return subprocess.Popen(arguments, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                close_fds=True, **detached_process_options())
+    except OSError as error:
+        if sys.platform == "win32" and getattr(error, "winerror", None) == 5:
+            raise WorkerError("Windows refused to start a job outside this SSH session. Use an OpenSSH host that permits process breakaway, or a separately configured worker host. No job was started and the recording is kept.") from error
+        raise
+
+
 def start_detached(root: Path, identifier: str) -> None:
     directory = job_path(root, identifier)
     arguments = [sys.executable, str(Path(__file__).resolve()), "run-job", "--root", str(root), "--id", identifier]
-    kwargs = {"stdin": subprocess.DEVNULL, "close_fds": True}
-    if os.name == "nt":
-        kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    else:
-        kwargs["start_new_session"] = True
     with (directory / "worker.log").open("ab", buffering=0) as log:
-        subprocess.Popen(arguments, stdout=log, stderr=log, **kwargs)
+        spawn_detached(arguments, log)
 
 
 def submit(root: Path, header: dict, source: BinaryIO) -> dict:
@@ -155,8 +195,7 @@ def submit(root: Path, header: dict, source: BinaryIO) -> dict:
             with open(os.devnull, "wb") as sink:
                 copy_exact(source, sink, size)
             return existing
-        state_path = directory / "status.json"
-        atomic_json(state_path, {"id": identifier, "state": "receiving"})
+        write_status(directory, "receiving")
         temporary = directory / "audio.partial"
         try:
             with temporary.open("wb") as audio:
@@ -164,10 +203,10 @@ def submit(root: Path, header: dict, source: BinaryIO) -> dict:
                 audio.flush(); os.fsync(audio.fileno())
             os.replace(temporary, directory / "audio.m4a")
             atomic_json(directory / "request.json", options)
-            atomic_json(state_path, {"id": identifier, "state": "queued"})
+            write_status(directory, "queued")
             start_detached(root, identifier)
-        except Exception:
-            atomic_json(state_path, {"id": identifier, "state": "failed", "error": "Submission was interrupted. Retry from the Mac."})
+        except Exception as error:
+            write_status(directory, "failed", error=failure_message(error))
             raise
     return {"id": identifier, "state": "queued"}
 
@@ -240,18 +279,28 @@ def run_job(root: Path, identifier: str) -> None:
     directory = job_path(root, identifier)
     try:
         with file_lock(directory / "run.lock", blocking=False):
-            if status(root, identifier)["state"] == "completed":
+            if status(root, identifier, check_stalled=False)["state"] not in ("queued", "running"):
                 return
-            # One model process at a time per worker root, even across submissions.
-            with file_lock(root / "engine.lock"):
-                atomic_json(directory / "status.json", {"id": identifier, "state": "running"})
-                result = transcribe(directory / "audio.m4a", read_json(directory / "request.json"))
-                atomic_json(directory / "transcript.json", result)
-                atomic_json(directory / "status.json", {"id": identifier, "state": "completed"})
-    except Exception as error:
-        message = str(error) if isinstance(error, WorkerError) else f"Transcription failed ({type(error).__name__}). Check the model, dependencies and any required model access on the processing computer."
-        atomic_json(directory / "status.json", {"id": identifier, "state": "failed", "error": message})
-        print(message, file=sys.stderr)
+            try:
+                # Hold run.lock even while queued, so long waits are not called stalled.
+                with file_lock(root / "engine.lock"):
+                    write_status(directory, "running")
+                    result = transcribe(directory / "audio.m4a", read_json(directory / "request.json"))
+                    atomic_json(directory / "transcript.json", result)
+                    write_status(directory, "completed")
+            except Exception as error:
+                message = failure_message(error)
+                write_status(directory, "failed", error=message)
+                print(message, file=sys.stderr)
+    except LockBusy:
+        return  # A duplicate runner must never overwrite the live runner's status.
+
+
+def module_available(name: str) -> bool:
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
+        return False
 
 
 def rpc(source: BinaryIO) -> dict:
@@ -268,12 +317,13 @@ def rpc(source: BinaryIO) -> dict:
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     operation = header.get("op")
     if operation == "probe":
-        return {"state": "ready", "version": VERSION,
-                "transcriptionInstalled": importlib.util.find_spec("faster_whisper") is not None}
+        return {"state": "ready", "version": VERSION, "protocolVersion": 1,
+                "transcriptionInstalled": module_available("faster_whisper"),
+                "diarizationInstalled": module_available("pyannote.audio")}
     if operation == "status":
-        return status(root, header.get("id"))
+        return {**status(root, header.get("id")), "protocolVersion": 1}
     if operation == "submit":
-        return submit(root, header, source)
+        return {**submit(root, header, source), "protocolVersion": 1}
     raise WorkerError("Unknown worker operation.")
 
 

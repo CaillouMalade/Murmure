@@ -22,12 +22,12 @@ public struct TranscriptionOptions: Codable, Equatable, Sendable {
     public init() {}
 }
 
-public struct WorkerEndpoint: Codable, Equatable, Sendable {
+public struct WorkerEndpoint: Codable, Hashable, Sendable {
     public var host: String
     public var python: String
     public var script: String
     public var root: String
-    public init(host: String = "", python: String = "python3", script: String = "Murmure/worker/murmure_worker.py", root: String = "~/.murmure") {
+    public init(host: String = "", python: String = "", script: String = "", root: String = "~/.murmure") {
         self.host = host; self.python = python; self.script = script; self.root = root
     }
 }
@@ -67,6 +67,10 @@ public struct RecordingJob: Codable, Identifiable, Sendable {
     public var endpoint: WorkerEndpoint?
     public var message: String?
     public var transcriptPath: String?
+    public var localWorkerRoot: String?
+    public var transcriptViewedAt: Date?
+    public var duration: Double?
+    public var hasUnreadTranscript: Bool { state == .completed && transcriptViewedAt == nil }
     public init(source: AudioSource, options: TranscriptionOptions) {
         id = UUID().uuidString.lowercased(); createdAt = Date()
         self.source = source; self.options = options; state = .recording
@@ -117,6 +121,9 @@ public struct WorkerResponse: Decodable, Sendable {
     public var error: String?
     public var transcript: Transcript?
     public var version: String?
+    public var protocolVersion: Int?
+    public var transcriptionInstalled: Bool?
+    public var diarizationInstalled: Bool?
 }
 
 public enum MurmureError: LocalizedError {

@@ -84,7 +84,7 @@ struct WorkerClient {
             arguments = ["-u", script.path, "rpc"]
         }
         var size: UInt64?
-        if let audio { size = try FileManager.default.attributesOfItem(atPath: audio.path)[.size] as? UInt64 }
+        if let audio { size = (try FileManager.default.attributesOfItem(atPath: audio.path)[.size] as? NSNumber)?.uint64Value }
         var options = job?.options
         if endpoint == nil { options?.device = "cpu" }
         let request = WorkerRequest(op: op, root: endpoint?.root ?? localRoot.path, id: job?.id, bytes: size, options: options)
@@ -94,6 +94,9 @@ struct WorkerClient {
         do { result = try JSONDecoder().decode(WorkerResponse.self, from: data) }
         catch { throw MurmureError.message("The worker returned an invalid response. Check that the app and worker versions match.") }
         if result.state == "error" { throw MurmureError.message(result.error ?? "The worker rejected the request.") }
+        if let protocolVersion = result.protocolVersion, protocolVersion != 1 {
+            throw MurmureError.message("The worker uses an incompatible protocol. Update the app and worker together.")
+        }
         return result
     }
 }

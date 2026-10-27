@@ -26,7 +26,7 @@ private final class SystemAudioSink: NSObject, SCStreamOutput, SCStreamDelegate,
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, sampleBuffer.isValid, CMSampleBufferDataIsReady(sampleBuffer), writeError == nil else { return }
         if !started {
-            guard writer.startWriting() else { writeError = writer.error; return }
+            guard writer.startWriting() else { writeError = writer.error ?? MurmureError.message("Mac audio writing could not start."); return }
             let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
             firstTime = time.seconds
             writer.startSession(atSourceTime: time); started = true
@@ -109,7 +109,10 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
     }
 
     func stop() async throws -> URL {
-        defer { if let activity { ProcessInfo.processInfo.endActivity(activity) }; activity = nil }
+        defer {
+            if let activity { ProcessInfo.processInfo.endActivity(activity) }
+            activity = nil; self.directory = nil
+        }
         guard let directory else { throw MurmureError.message("There is no recording to stop.") }
         var tracks: [(URL, Double)] = []
         if let microphone {
@@ -117,12 +120,15 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
             tracks.append((directory.appendingPathComponent("microphone.m4a"), microphoneStart))
         }
         if let stream {
-            try await stream.stopCapture(); self.stream = nil
+            let sink = self.sink
+            self.stream = nil; self.sink = nil
+            var stopError: Error?
+            do { try await stream.stopCapture() } catch { stopError = error }
             if let sink {
                 let start = try await sink.finish()
                 tracks.append((directory.appendingPathComponent("system.m4a"), start))
             }
-            self.sink = nil
+            if let stopError { throw stopError }
         }
         let output = directory.appendingPathComponent("audio.m4a")
         if tracks.count == 1 { try FileManager.default.moveItem(at: tracks[0].0, to: output); return output }
