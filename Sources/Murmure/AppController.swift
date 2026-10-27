@@ -65,9 +65,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         let recording = recordingID != nil && !transitioning
         let readyCount = jobs.filter(\.hasUnreadTranscript).count
         let symbol = recording ? "record.circle.fill" : (transitioning ? "ellipsis.circle" : (readyCount > 0 ? "text.bubble.fill" : "waveform.circle"))
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: recording ? "Stop recording" : "Start recording")
+        var image = NSImage(systemSymbolName: symbol, accessibilityDescription: recording ? "Stop recording" : "Start recording")
+        if recording { image = image?.withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [.systemRed])) }
         image?.isTemplate = !recording; button.image = image
-        button.contentTintColor = recording ? .systemRed : nil
+        button.contentTintColor = nil
         button.toolTip = recording ? "Recording. Click to stop. Right-click for options." : (readyCount > 0 ? "\(readyCount) unread transcript(s). Right-click to open. Click to record." : "Click to record. Right-click for sources, transcripts and Settings.")
     }
 
@@ -295,6 +296,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showSettings(_ sender: Any?) {
+        settingsWindow?.close()
         settingsWindow = SettingsWindow(settings: settings, localRoot: repository.separateLocalWorkerRoot) { [weak self] updated in
             self?.settings = updated; self?.saveSettings()
         }

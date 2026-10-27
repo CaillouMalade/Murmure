@@ -12,6 +12,7 @@ Versions use SemVer. The first two development milestones are 0.1.0 (v1) and 0.2
 - Show audio source/duration, activate alerts, avoid empty failed permission attempts, and explain missing worker dependencies in connection tests.
 - Stop repeated requests to an unreachable endpoint within one check; keep recording files and all existing SSH verification rules.
 - Pin a compatible worker audio runtime after real testing caught newer PyAV import/API problems; add model-free runtime decoding to both CI runners and an opt-in genuine inference smoke test.
+- Give the recording symbol an explicit red palette and reuse a single Settings window.
 
 ## 0.1.0 — 2026-10-27
 
