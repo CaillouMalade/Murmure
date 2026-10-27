@@ -16,13 +16,14 @@ Results checked on launch, wake and user interaction. No immediate-result promis
 
 ## Verified state
 
-All 9 worker tests passed on Windows and in the first macOS workflow. The first native compile identified a main-actor entrypoint issue; fixed with an explicit main-actor application entrypoint and delegate lifetime. Also replaced the deprecated export callback with the macOS 15 async export API. The corrected native build is pending. No model has been downloaded or executed, no user recording captured, no SSH server/model environment configured, and no real Mac UX/energy tests performed. Do not claim those passed.
+V1 source commit `881f1134f835370abaf8f9449215bc7b3bc9077a` passed all 9 worker tests and 4 Swift tests on the GitHub macOS runner, both release architectures, bundle/worker checks and artifact upload. Workflow: https://github.com/CaillouMalade/Murmure/actions/runs/40590697236 . The packaged app directory measured 1.1 MiB on the runner; this is disk size, not measured memory use. The same 9 worker tests passed locally on Windows. Tag `v0.1.0` targets this exact tested source commit; later documentation-only commits record the result.
+
+The first native compile caught an entrypoint isolation issue; it was fixed before the passing build. No model has been downloaded or executed, no user recording captured, no SSH server/model environment configured, and no real Mac UX/energy tests performed. Do not claim those passed.
 
 ## Current next steps
 
-1. Run worker tests locally and inspect the implementation; commit v1 and run the GitHub macOS workflow.
-2. Fix any build/test failures, tag the verified v1 source `v0.1.0`, then ask COS (`agent-9041c389-d2e0-4055-9373-00a572fdd91f`) for a read-only review using `openbot.send_message`. Include the brief, tag, tests and known limits. End the turn after sending; the reply resumes work.
-3. Assess COS's findings, record them with accepted/rejected changes in `docs/REVIEW_V1.md`, implement focused v2 improvements, run checks and tag `v0.2.0`.
+1. V1 implementation, automated verification and tag are complete. Send COS (`agent-9041c389-d2e0-4055-9373-00a572fdd91f`) a read-only review request using `openbot.send_message`, with the brief, tag, tests and known limits. End the turn after sending; their reply resumes work.
+2. Assess COS's findings, record them with accepted/rejected changes in `docs/REVIEW_V1.md`, implement focused v2 improvements, run checks and tag `v0.2.0`. The original user request is still active until this is complete.
 
 ## Commands
 
