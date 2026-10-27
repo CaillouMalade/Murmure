@@ -34,6 +34,15 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r worker/requirements.txt
 ```
 
+The worker requirements pin Faster Whisper 1.2.1 and PyAV 16.0.1. Newer PyAV 19 removed an audio-opening argument that this Faster Whisper version uses; the runtime check below catches native import/decode failures without downloading a model:
+
+```bash
+# Linux/macOS:
+.venv/bin/python scripts/check-worker-runtime.py
+# Windows instead:
+.venv/Scripts/python.exe scripts/check-worker-runtime.py
+```
+
 Faster Whisper downloads the selected model the first time it runs. The default is `small`. Auto selects CUDA when CTranslate2 reports a CUDA device, otherwise CPU/int8; device discovery alone does not prove that the required runtime libraries are installed. An incomplete GPU setup reports a job error. A model directory may be used instead of a model name to use previously downloaded weights. NVIDIA acceleration needs the compatible CUDA/cuDNN libraries described in the [Faster Whisper documentation](https://github.com/SYSTRAN/faster-whisper#gpu).
 
 For speaker labels, also install `worker/requirements-diarization.txt`, install FFmpeg for Pyannote's audio decoding, accept the [Community-1 model conditions](https://huggingface.co/pyannote/speaker-diarization-community-1), and authenticate Hugging Face **on the processing computer** with its CLI. Alternatively, set `MURMURE_HF_TOKEN_FILE` to a private file outside this repository containing your token; the worker inherits that environment variable. Never paste a token into Murmure Settings or commit it. The worker uses the open-source Community-1 pipeline, not a paid service. Diarization labels speakers; it does not identify people by name, and overlapping speech may be ambiguous.
@@ -83,5 +92,7 @@ bash scripts/build-app.sh
 ```
 
 CI tests the worker protocol without models or credentials, verifies actual Windows process lifetime in OS job objects, runs native core/upgrade tests, builds both Mac architectures, checks the bundle and uploads an installable ZIP. The Windows lifetime test kills a session-like parent and checks that the worker child survives; it also tests a host that denies breakaway. It does not authenticate over SSH. Those checks do not establish microphone/system-audio behavior, model quality, SSH access to your computer, or idle memory/battery numbers. Use the [Mac verification checklist](docs/MAC_TESTING.md) before treating it as a daily recorder. Development is taking place on Windows; native interaction and energy measurements need a real Mac.
+
+A separate opt-in real-model test passed on Windows with synthetic English speech encoded to M4A, the `tiny.en` model and CPU/int8. It submitted through the worker protocol, waited for the actual detached process and fetched the transcript; no inference modules were faked. This establishes that basic worker path, not speaker-label accuracy or real Mac recording. To repeat with synthetic audio of your own, use the worker venv to run `scripts/smoke-worker.py --audio /path/to/synthetic.wav --root /path/to/test-output`. It downloads a public model on first use. CI's runtime checks install the dependencies and decode generated silence; CI does not download model weights.
 
 See [PROJECT_STATE.md](PROJECT_STATE.md), [CHANGELOG.md](CHANGELOG.md), and the [worker protocol](docs/PROTOCOL.md).

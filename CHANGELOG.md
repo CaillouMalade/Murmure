@@ -11,6 +11,7 @@ Versions use SemVer. The first two development milestones are 0.1.0 (v1) and 0.2
 - Isolate new local worker files, preserve v1 local paths and metadata, and correctly recover local versus remote uploads.
 - Show audio source/duration, activate alerts, avoid empty failed permission attempts, and explain missing worker dependencies in connection tests.
 - Stop repeated requests to an unreachable endpoint within one check; keep recording files and all existing SSH verification rules.
+- Pin a compatible worker audio runtime after real testing caught newer PyAV import/API problems; add model-free runtime decoding to both CI runners and an opt-in genuine inference smoke test.
 
 ## 0.1.0 — 2026-10-27
 

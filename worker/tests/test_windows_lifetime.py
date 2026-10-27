@@ -57,7 +57,10 @@ class WindowsLifetimeTests(unittest.TestCase):
         events = [kernel.CreateEventW(None, True, False, name) for name in names]
         output = Path(self.temporary.name) / "survival.txt"
         helper = Path(__file__).with_name("windows_lifetime_probe.py")
-        broker = subprocess.Popen([sys.executable, str(helper), "broker", *names, str(output)],
+        # A venv's Windows redirector may launch its real interpreter before it
+        # is assigned to the test job. Use the base interpreter for this stdlib test.
+        broker_python = getattr(sys, "_base_executable", None) or sys.executable
+        broker = subprocess.Popen([broker_python, str(helper), "broker", *names, str(output)],
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             self.assertTrue(kernel.AssignProcessToJobObject(job, int(broker._handle)), ctypes.get_last_error())

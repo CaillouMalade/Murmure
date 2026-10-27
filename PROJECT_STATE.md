@@ -18,13 +18,17 @@ Results checked on launch, wake and user interaction. V2 marks unread results; a
 
 V1 source commit `881f1134f835370abaf8f9449215bc7b3bc9077a` passed all 9 worker tests and 4 Swift tests on the GitHub macOS runner, both release architectures, bundle/worker checks and artifact upload. Workflow: https://github.com/CaillouMalade/Murmure/actions/runs/40590697236 . The packaged app directory measured 1.1 MiB on the runner; this is disk size, not measured memory use. The same 9 worker tests passed locally on Windows. Tag `v0.1.0` targets this exact tested source commit; later documentation-only commits record the result.
 
-The first native compile caught an entrypoint isolation issue; it was fixed before the passing build. No model has been downloaded or executed, no user recording captured, no SSH server/model environment configured, and no real Mac UX/energy tests performed. Do not claim those passed.
+The first native compile caught an entrypoint isolation issue; it was fixed before the passing build. At the v1 milestone no model had been run. No user recording has been captured, SSH has not been configured, and no real Mac UX/energy tests have been performed. Do not claim those passed.
 
-COS returned a read-only review (message 979876ab-a9b2-4d5a-a841-db238d9fc5b0 replying to b8a35455-bc3c-48df-b8d4-8db9284c2fff). Decisions and exact boundaries are recorded in docs/REVIEW_V1.md. All 18 v2 worker tests passed locally on Windows, including actual kill-on-close job-object survival and refusal tests. A live localhost SSH attempt was refused by StrictHostKeyChecking because no trusted ED25519 host key is configured; leave that check intact. Native v2 tests and universal build are pending.
+COS returned a read-only review (message 979876ab-a9b2-4d5a-a841-db238d9fc5b0 replying to b8a35455-bc3c-48df-b8d4-8db9284c2fff). Decisions and exact boundaries are recorded in docs/REVIEW_V1.md. V2 commit `6396aa482bfb84fab877bc7aa705a1893e34fb74` passed GitHub run https://github.com/CaillouMalade/Murmure/actions/runs/40592761676 : 18 Windows worker tests (including two actual kill-on-close job-object survival/refusal tests), 16 worker tests on macOS plus two Windows-only skips, six Swift tests, both app architectures and bundle checks. The app directory was 1.2 MiB on disk, excluding Python/models. Native V2 interaction and energy measurements remain unverified.
+
+A separate real worker test passed locally with a public `tiny.en` model, CPU/int8 and synthetic speech encoded to M4A, using streamed input, a real detached worker and result lookup. Sample text is in docs/REVIEW_V1.md. A project-only `.venv` and `.build/model-cache` were created for testing; neither is shipped or committed. Actual installs exposed PyAV 19.0.2/18.1.0 import hangs on Windows/Python 3.13 and the PyAV 19/Faster Whisper metadata API mismatch. Pinning Faster Whisper 1.2.1 + PyAV 16.0.1 passed real import, decode and inference. The added CI runtime checks and final source commit still need verification before tagging v0.2.0.
+
+A live localhost SSH attempt was refused by StrictHostKeyChecking because no trusted ED25519 host key is configured; leave that check intact. No Mac-to-G14 SSH session or diarization test has been performed.
 
 ## Current next steps
 
-1. V1 implementation, automated verification/tag and COS review are complete. V2 focused changes and regression tests are implemented; push and verify the GitHub Windows/macOS workflow.
+1. V1 implementation, automated verification/tag and COS review are complete. V2 focused changes passed initial CI; push the dependency/runtime-test follow-up and verify the final GitHub Windows/macOS workflow.
 2. Fix any failures, tag the exact passing v2 source `v0.2.0`, record final evidence and provide the build/source links. The original user request remains active until that is complete. Do not ask COS again or redo v1.
 
 ## Commands

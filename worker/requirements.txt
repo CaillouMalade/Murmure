@@ -1,2 +1,5 @@
 # Models are downloaded on the processing computer at first use, not in the app.
-faster-whisper>=1.2.1,<2
+faster-whisper==1.2.1
+# PyAV 19 removed av.open(metadata_errors=...), used by Faster Whisper 1.2.1.
+# 16.0.1 also passed the Windows runtime check where newer ABI3 wheels hung.
+av==16.0.1
