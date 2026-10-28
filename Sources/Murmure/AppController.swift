@@ -87,7 +87,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            guard let command = DictationCommand(url: url) else { continue }
+            guard let command = DictationCommand.parse(url) else { continue }
             switch command {
             case .start: startDictation()
             case .stop: dictation?.stop()

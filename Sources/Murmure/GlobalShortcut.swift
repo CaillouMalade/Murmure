@@ -5,7 +5,7 @@ import MurmureCore
 private func murmureHotKeyHandler(_ next: EventHandlerCallRef?, _ event: EventRef?, _ data: UnsafeMutableRawPointer?) -> OSStatus {
     guard let event, let data else { return OSStatus(eventNotHandledErr) }
     var identifier = EventHotKeyID()
-    let result = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, UInt32(MemoryLayout<EventHotKeyID>.size), nil, &identifier)
+    let result = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &identifier)
     guard result == noErr, identifier.signature == 0x4D75726D else { return OSStatus(eventNotHandledErr) }
     let monitor = Unmanaged<GlobalShortcut>.fromOpaque(data).takeUnretainedValue()
     let pressed = GetEventKind(event) == UInt32(kEventHotKeyPressed)
@@ -23,7 +23,7 @@ final class GlobalShortcut {
         unregister(); guard enabled else { return }
         if handler == nil {
             var types = [EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)), EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))]
-            let status = InstallEventHandler(GetApplicationEventTarget(), murmureHotKeyHandler, UInt32(types.count), &types, Unmanaged.passUnretained(self).toOpaque(), &handler)
+            let status = InstallEventHandler(GetApplicationEventTarget(), murmureHotKeyHandler, types.count, &types, Unmanaged.passUnretained(self).toOpaque(), &handler)
             guard status == noErr else { throw MurmureError.message("The dictation shortcut listener could not start (\(status)).") }
         }
         var modifiers: UInt32 = 0
