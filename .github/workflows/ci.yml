@@ -4,23 +4,54 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      source-ref:
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ inputs.source-ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan history and current files (redacted)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o "$RUNNER_TEMP/gitleaks.tar.gz"
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  '"$RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner .
+          "$RUNNER_TEMP/gitleaks" dir --redact --no-banner .
   windows-worker:
     runs-on: windows-2025
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
+      - name: Check release versions, links and packaging guards
+        run: |
+          python scripts/release.py check
+          python -m unittest discover -s scripts/tests -v
       - name: Worker protocol and real Windows process lifetime
         run: python -m unittest discover -s worker/tests -v
       - name: Check actual worker runtime without models
@@ -32,10 +63,17 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
+      - name: Check release versions, links and packaging guards
+        run: |
+          python3 scripts/release.py check
+          python3 -m unittest discover -s scripts/tests -v
       - name: Worker protocol and failure tests (no models or credentials)
         run: python3 -m unittest discover -s worker/tests -v
       - name: Check actual worker runtime without models
@@ -48,9 +86,9 @@ jobs:
         env:
           MURMURE_SNAPSHOT_DIR: ${{ github.workspace }}/.build/indicator-snapshots
       - name: Upload native indicator snapshots
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: indicator-${{ github.sha }}
+          name: indicator-${{ inputs.source-ref || github.sha }}
           path: .build/indicator-snapshots/*.png
           if-no-files-found: error
       - name: Build universal Mac app
@@ -60,9 +98,9 @@ jobs:
           lipo -archs dist/Murmure.app/Contents/MacOS/Murmure
           du -sh dist/Murmure.app
       - name: Upload versioned Mac build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Murmure-macOS-${{ github.sha }}
+          name: Murmure-macOS-${{ inputs.source-ref || github.sha }}
           path: |
             dist/Murmure-*-macOS.zip
             dist/Murmure-*-worker.zip

@@ -1,6 +1,6 @@
 # V2 automated validation
 
-V2 incorporates the [COS review and recorded decisions](REVIEW_V1.md). The earlier milestone remains at `v0.1.0`; no tag was rewritten.
+V2 includes the [recorded changes](../CHANGELOG.md#020--2026-10-27). The earlier milestone remains at `v0.1.0`; no tag was rewritten.
 
 - Tested v2 source: `5415f554246756e951d0c21e5cfdfd1dc17141ab`, tagged `v0.2.0`.
 - [Final passing workflow](https://github.com/CaillouMalade/Murmure/actions/runs/40594377153): all 18 Windows worker tests passed, including actual Windows job-object survival and refusal. On macOS, 16 worker tests passed and the two Windows-only tests were skipped. All six Swift core/upgrade tests passed.
@@ -21,4 +21,4 @@ This check caught native import hangs with PyAV 19.0.2/18.1.0 on this machine, a
 
 ## Remaining real-world checks
 
-The development app is not Developer ID signed or notarized. No native Mac UI session, real microphone/system recording, audio mix/alignment, speaker diarization, memory/energy measurement or authenticated Mac-to-G14 SSH test has been performed. A localhost SSH preflight correctly refused an unknown host key; no SSH service/configuration was changed to make it pass. Use [MAC_TESTING.md](MAC_TESTING.md) during setup. The remote worker environment and SSH trust still need configuring by the user.
+The development app is not Developer ID signed or notarized. No native Mac UI session, real microphone/system recording, audio mix/alignment, speaker diarization, memory/energy measurement or authenticated Mac-to-server SSH test has been performed. A localhost SSH preflight correctly refused an unknown host key; no SSH service/configuration was changed to make it pass. Use [MAC_TESTING.md](MAC_TESTING.md) during setup. The remote worker environment and SSH trust still need configuring by the user.

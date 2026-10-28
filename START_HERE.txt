@@ -1,14 +1,14 @@
-Murmure 0.4.0 development build — macOS 15 or later
+Murmure 0.4.1 — experimental prerelease, macOS 15 or later
 
 ON THE MAC
-1. Unzip Murmure-0.4.0-macOS.zip and move Murmure.app to Applications.
+1. Unzip Murmure-0.4.1-macOS.zip and move Murmure.app to Applications.
    This build is unsigned and not notarized. If macOS blocks it, review the
    app under System Settings > Privacy & Security before opening it.
 2. The app opens Setup on a fresh install. It records only when you start it.
    The Mac needs no Python or Whisper model when transcription uses SSH.
 
-ON THE PROCESSING COMPUTER (G14, OR YOUR OWN SERVER)
-3. Extract Murmure-0.4.0-worker.zip to a permanent folder without spaces,
+ON THE PROCESSING COMPUTER
+3. Extract Murmure-0.4.1-worker.zip to a permanent folder without spaces,
    e.g. C:/Murmure on Windows. The ZIP contains a folder named Murmure-worker;
    use that folder itself as your permanent worker folder.
 4. Install Python 3.12 on Windows (3.11/3.12 on Mac/Linux).
@@ -18,7 +18,7 @@ ON THE PROCESSING COMPUTER (G14, OR YOUR OWN SERVER)
        bash scripts/setup-worker.sh
    The script installs a separate .venv, checks decoding and prints the two
    paths to enter in the Mac app. It does not install SSH or download a model.
-   If your PowerShell policy blocks the script, follow README.md's individual
+   If your PowerShell policy blocks the script, follow docs/SETUP.md's individual
    venv/pip commands; do not weaken your system's policy.
 
 BACK ON THE MAC
@@ -53,10 +53,13 @@ OPTIONAL
   its Local Python path in Setup. Prepare the model with the local button.
 - Local quick dictation uses Apple's on-device recognition, not Python.
 - Speaker labels need the separate diarization requirements, FFmpeg and
-  Community-1 model access on the processing computer. See README.md.
+  Community-1 model access on the processing computer. See docs/SETUP.md.
 - CLI summaries remain off until configured and enabled. They use your own
   signed-in Codex/Claude CLI account and its normal usage/billing.
 
 The server must already be reachable and awake; Murmure does not configure it.
-Real Mac permissions, capture, editor behavior and energy use still need your
-trial. Automated builds and synthetic audio tests do not establish those.
+Real Mac permissions, capture, editor behavior and energy use still need live
+testing. Automated builds and synthetic audio tests do not establish those.
+
+Get app/worker pairs from https://github.com/CaillouMalade/Murmure/releases.
+The release includes SHA256SUMS for download verification. See docs/SETUP.md.

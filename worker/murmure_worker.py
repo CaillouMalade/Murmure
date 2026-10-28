@@ -19,7 +19,7 @@ import time
 from typing import BinaryIO
 import uuid
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 MAX_HEADER = 16_384
 MAX_AUDIO_BYTES = 16 * 1024**3
 CHUNK = 64 * 1024

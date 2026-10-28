@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT"
+python3 scripts/release.py check
 VERSION="$(tr -d '\r\n' < VERSION)"
 DIST="$ROOT/dist"
 APP="$DIST/Murmure.app"
@@ -15,6 +16,7 @@ done
 lipo -create "${BINARIES[@]}" -output "$APP/Contents/MacOS/Murmure"
 cp worker/murmure_worker.py "$APP/Contents/Resources/murmure_worker.py"
 cp START_HERE.txt "$APP/Contents/Resources/START_HERE.txt"
+cp LICENSE "$APP/Contents/Resources/LICENSE"
 python3 - "$ROOT" "$VERSION" <<'PY'
 from pathlib import Path
 import plistlib
@@ -31,11 +33,6 @@ PY
 plutil -lint "$APP/Contents/Info.plist"
 python3 scripts/check-bundle.py "$APP"
 ditto -c -k --keepParent "$APP" "$DIST/Murmure-$VERSION-macOS.zip"
-WORKER="$DIST/Murmure-worker"
-mkdir -p "$WORKER/worker" "$WORKER/scripts" "$WORKER/docs"
-cp worker/murmure_worker.py worker/requirements.txt worker/requirements-diarization.txt "$WORKER/worker/"
-cp scripts/setup-worker.ps1 scripts/setup-worker.sh scripts/check-worker-runtime.py "$WORKER/scripts/"
-cp START_HERE.txt README.md "$WORKER/"
-cp docs/*.md "$WORKER/docs/"
-ditto -c -k --keepParent "$WORKER" "$DIST/Murmure-$VERSION-worker.zip"
+python3 scripts/release.py worker --output "$DIST"
+cp START_HERE.txt "$DIST/START_HERE.txt"
 echo "Built $DIST/Murmure-$VERSION-macOS.zip (arm64 + x86_64, macOS 15+)"

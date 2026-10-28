@@ -12,7 +12,7 @@ Tag `v0.4.0` targets exact tested source `68af3c1113cfc86457da71f907a2034568f344
 - Both CI platforms installed the pinned requirements and passed actual native imports and generated-silence decoding, without model downloads.
 - Both arm64 and x86_64 release binaries were built and bundled as a universal macOS 15+ app. Bundle/worker metadata, guide resources and permissions checks passed.
 - The four Settings tabs, Setup's scrolled model/local section, six-bar indicator and Copy recovery window rendered to native PNGs. The previews were downloaded and inspected. A warning that was hard to see in an offscreen preview received an opaque native banner; the final preview clearly shows it. The layout check uses measured font height instead of assuming a particular line count.
-- PowerShell setup-script parsing, Bash syntax for setup/build scripts and Python compilation passed locally. Setup scripts were not used to install software or change Arthur's server.
+- PowerShell setup-script parsing, Bash syntax for setup/build scripts and Python compilation passed locally. Setup scripts were not used to install software or change the processing computer.
 
 ## Actual CPU model checks
 
@@ -22,7 +22,7 @@ A separate real foreground dictation RPC with synthetic English speech passed, a
 
 > Murmur keeps the recording safe. The remote computer transcribes it while the Mac can sleep.
 
-Job `98e2b454-7a8a-464f-a60f-03d9876b5d67` is under ignored `.build/v4-dictation-smoke`. No private recording, provider call, key, new model download, SSH setup or account change was used. The model/venv are not shipped. This proves local worker/RPC inference, not Mac-to-G14 transport or CUDA.
+Job `98e2b454-7a8a-464f-a60f-03d9876b5d67` is under ignored `.build/v4-dictation-smoke`. No private recording, provider call, key, new model download, SSH setup or account change was used. The model/venv are not shipped. This proves local worker/RPC inference, not Mac-to-server transport or CUDA.
 
 ## Inspected downloads
 
@@ -39,4 +39,4 @@ The preserved v0.3.0 ZIP was rehashed and still matches `4f000a225dbc4bb599f077a
 
 ## Still unverified
 
-Development runs on Windows. Live Mac capture/permissions, actual shortcut press/release, target-editor insertion and non-activation behavior, Apple recognition, real Mac-to-G14 SSH, GPU inference, diarization quality, actual provider CLI accounts and idle memory/energy still require native user trials. The G14 already stays awake as a server; no power policy was changed. These remain unsigned, non-notarized development builds. [START_HERE.txt](../START_HERE.txt) covers the one-time worker/model/SSH setup; it has not been performed for Arthur automatically.
+Development runs on Windows. Live Mac capture/permissions, actual shortcut press/release, target-editor insertion and non-activation behavior, Apple recognition, real Mac-to-server SSH, GPU inference, diarization quality, actual provider CLI accounts and idle memory/energy still require native user trials. The processing server was already configured to remain awake; no power policy was changed. These remain unsigned, non-notarized development builds. [START_HERE.txt](../START_HERE.txt) covers the one-time worker/model/SSH setup; server setup remains a manual step.

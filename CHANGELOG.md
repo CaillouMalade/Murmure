@@ -1,10 +1,18 @@
 # Changelog
 
-Versions use SemVer. The first two development milestones are 0.1.0 (v1) and 0.2.0 (reviewed v2); neither is a claim of production readiness.
+Versions use SemVer. All current 0.x builds are experimental. Tags are immutable; published downloads are never replaced in place.
+
+## 0.4.1 — 2026-10-28
+
+- Add the MIT licence and public installation, usage, development and release documentation.
+- Package matching app/worker downloads with the licence, source metadata and SHA-256 checksums.
+- Add a tag-triggered release workflow: both platforms must pass before a draft prerelease is created; publication remains manual.
+- Check version agreement, archive contents and source identity before preparing a release.
+- Remove personal development notes from the current tree; preserve existing history and milestone tags.
+- Keep the v0.4.0 app behavior. Native Mac trials, real SSH, provider inference, diarization quality and energy measurements remain outstanding.
 
 ## 0.4.0 — 2026-10-28
 
-- Apply the relevant council feedback after Arthur's approval; keep the always-awake G14's power policy unchanged.
 - Preserve usable microphone audio after combined-capture failure, disclose dropped samples/partial tracks, keep capture warnings in transcripts and add manual original-track recovery.
 - Separate recording and dictation history while retaining older entries' actions.
 - Add Copy-only dictation and visible, non-activating recovery for unsupported/changed targets or unconfirmed insertion; verify accessibility text changes and retain secure-field guards.
@@ -26,7 +34,7 @@ Versions use SemVer. The first two development milestones are 0.1.0 (v1) and 0.2
 
 ## 0.2.0 — 2026-10-27
 
-- Address COS's [v1 review](docs/REVIEW_V1.md) without expanding the product scope.
+- Improve job lifetime, result delivery and recovery without expanding the recording workflow.
 - Request Windows process breakaway so remote jobs can outlive SSH, with explicit refusal handling and real OS process-lifetime tests.
 - Detect abandoned receiving/queued/running states on demand; do not mislabel live long jobs or overwrite a live runner from a duplicate.
 - Mark unread transcripts in the menu bar and job list; open the latest unread result after an explicit check, and show check/error feedback.

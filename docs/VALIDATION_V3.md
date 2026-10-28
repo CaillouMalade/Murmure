@@ -13,7 +13,7 @@ Tag `v0.3.0` targets tested source `48e1ae4a0b0f638d226448453246202e21ce00d2`. B
 
 ## Actual inference
 
-A separate opt-in test on the Windows G14 used synthetic English speech encoded to M4A, a public `tiny.en` model and CPU/int8. A real foreground RPC subprocess returned a completed transcript with no mocked inference:
+A separate opt-in test on the Windows processing computer used synthetic English speech encoded to M4A, a public `tiny.en` model and CPU/int8. A real foreground RPC subprocess returned a completed transcript with no mocked inference:
 
 > Murmur keeps the recording safe. The remote computer transcribes it while the Mac can sleep.
 
@@ -23,7 +23,7 @@ Test job `efaa5e45-9ba2-42c8-8d8e-c990463c2ab1` is under the ignored `.build/dic
 .venv/Scripts/python.exe scripts/smoke-worker.py --foreground --audio .build/smoke-input/synthetic.wav --root .build/dictation-smoke
 ```
 
-No private recording, provider key or paid provider inference was used. This proves the foreground worker/inference path on Windows, not a Mac-to-G14 SSH session.
+No private recording, provider key or paid provider inference was used. This proves the foreground worker/inference path on Windows, not a Mac-to-server SSH session.
 
 ## Inspected download
 
@@ -38,8 +38,8 @@ No private recording, provider key or paid provider inference was used. This pro
 
 Development runs on Windows. A real Mac must check microphone/system capture, Accessibility permissions, focus/selection guards, Unicode delivery in specific editors, global shortcut press/release, command focus, Apple on-device recognition, and actual animation/energy behavior. [MAC_TESTING.md](MAC_TESTING.md) records those checks.
 
-The existing strict unknown-host SSH preflight refusal remains unresolved; no host key or SSH policy was changed, and no live Mac-to-G14 connection is claimed. No real Codex/Claude account inference was invoked; documentation and executable fixtures verify the integration contract, while actual CLI version/login/provider behavior needs checking on the Mac. Speaker diarization quality, native idle RAM/battery and signing/notarization are also unverified.
+The existing strict unknown-host SSH preflight refusal remains unresolved; no host key or SSH policy was changed, and no live Mac-to-server connection is claimed. No real Codex/Claude account inference was invoked; documentation and executable fixtures verify the integration contract, while actual CLI version/login/provider behavior needs checking on the Mac. Speaker diarization quality, native idle RAM/battery and signing/notarization are also unverified.
 
-The native capsule preview below is rendered from the app's own view at six times its menu-bar size. It is a static rendering, not a screenshot from Arthur's Mac.
+The native capsule preview below is rendered from the app's own view at six times its menu-bar size. It is a static rendering, not a live Mac screenshot.
 
 ![Native six-bar dictation capsule](assets/dictation-indicator.png)
