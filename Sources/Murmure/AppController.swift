@@ -12,6 +12,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var transitioning = false
     private var checking = false
     private var submissions: Set<String> = []
+    private var summaryTasks: [String: Task<Void, Never>] = [:]
     private var settingsWindow: SettingsWindow?
     private var transcriptWindow: TranscriptWindow?
     private var activeMenu: NSMenu?
@@ -51,6 +52,11 @@ final class AppController: NSObject, NSApplicationDelegate {
             showError(MurmureError.message("Audio is still being sent. Wait for the transfer to finish before quitting."))
             return .terminateCancel
         }
+        for task in summaryTasks.values { task.cancel() }
+        for var job in jobs where job.summary?.state == .running {
+            job.summary?.state = .interrupted; job.summary?.error = "Summarization stopped when Murmure quit. Retry manually."
+            try? persist(job)
+        }
         return .terminateNow
     }
 
@@ -63,7 +69,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func updateIndicator() {
         guard let button = statusItem?.button else { return }
         let recording = recordingID != nil && !transitioning
-        let readyCount = jobs.filter(\.hasUnreadTranscript).count
+        let readyCount = jobs.filter { $0.hasUnreadTranscript || $0.hasUnreadSummary }.count
         let symbol = recording ? "record.circle.fill" : (transitioning ? "ellipsis.circle" : (readyCount > 0 ? "text.bubble.fill" : "waveform.circle"))
         var image = NSImage(systemSymbolName: symbol, accessibilityDescription: recording ? "Stop recording" : "Start recording")
         if recording { image = image?.withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [.systemRed])) }
@@ -118,11 +124,23 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func jobTitle(_ job: RecordingJob) -> String {
         let time = DateFormatter.localizedString(from: job.createdAt, dateStyle: .short, timeStyle: .short)
         let duration = job.duration.map { " · \(Transcript.timestamp($0))" } ?? ""
-        return "\(job.hasUnreadTranscript ? "New · " : "")\(time) · \(job.source.title)\(duration) · \(job.state.title)"
+        let status = job.summary?.state == .running ? "Summarizing…" : (job.hasUnreadSummary ? "Summary ready" : job.state.title)
+        return "\(job.hasUnreadTranscript || job.hasUnreadSummary ? "New · " : "")\(time) · \(job.source.title)\(duration) · \(status)"
     }
     private func jobActions(_ job: RecordingJob) -> NSMenu {
         let actions = NSMenu()
-        if job.state == .completed { actions.addItem(menuItem("Open transcript…", action: #selector(openTranscript), represented: job.id)) }
+        if job.state == .completed {
+            actions.addItem(menuItem("Open transcript…", action: #selector(openTranscript), represented: job.id))
+            actions.addItem(menuItem("Export Markdown…", action: #selector(exportMarkdown), represented: job.id))
+            if job.effectiveKind == .recording {
+                let summarize = menuItem("Summarize with \(settings.summary.provider.title)…", action: #selector(summarizeFromMenu), represented: job.id)
+                summarize.isEnabled = summaryTasks[job.id] == nil; actions.addItem(summarize)
+            }
+            if job.summary?.state == .completed { actions.addItem(menuItem("Open summary…", action: #selector(openSummary), represented: job.id)) }
+            if let error = job.summary?.error {
+                let detail = menuItem("Summary: \(String(error.prefix(100)))", action: #selector(showSummaryError), represented: job.id); actions.addItem(detail)
+            }
+        }
         if let message = job.message, !message.isEmpty {
             let detail = menuItem(String(message.prefix(120)), action: nil); detail.isEnabled = false; actions.addItem(detail)
             actions.addItem(menuItem("Show details…", action: #selector(showJobDetails), represented: job.id))
@@ -151,6 +169,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func startRecording() async {
         transitioning = true; updateIndicator()
         var job = RecordingJob(source: settings.source, options: settings.options)
+        if settings.summary.automatic { job.automaticSummary = settings.summary }
         var started = false
         do {
             try await recorder.start(source: job.source, directory: repository.directory(for: job.id))
@@ -273,26 +292,90 @@ final class AppController: NSObject, NSApplicationDelegate {
         case "completed":
             guard let transcript = response.transcript else { throw MurmureError.message("The worker reported completion without a transcript.") }
             let directory = try repository.directory(for: job.id)
-            let text = transcript.formatted(timestamps: job.options.timestamps)
-            let file = directory.appendingPathComponent("transcript.txt")
+            let text = MarkdownWorkflow.transcript(transcript, job: job)
+            let file = directory.appendingPathComponent("transcript.md")
             try text.write(to: file, atomically: true, encoding: .utf8)
             try JSONEncoder().encode(transcript).write(to: directory.appendingPathComponent("transcript.json"), options: .atomic)
             updated.transcriptPath = file.path; updated.state = .completed; updated.message = nil
             if job.state != .completed { updated.transcriptViewedAt = nil }
-            do {
-                let folder = settings.outputFolder.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/Murmure") : URL(fileURLWithPath: settings.outputFolder)
-                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                let date = DateFormatter(); date.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-                let name = "\(date.string(from: job.createdAt))_\(job.id.prefix(6)).txt"
-                try text.write(to: folder.appendingPathComponent(name), atomically: true, encoding: .utf8)
-            } catch { updated.message = "Transcript saved inside Murmure. Export to the chosen folder failed: \(error.localizedDescription)" }
+            if job.effectiveKind == .recording {
+                do { updated.exportedTranscriptPath = try MarkdownWorkflow.writeUnique(text, to: outputFolder.appendingPathComponent(MarkdownWorkflow.filename(for: job))).path }
+                catch { updated.message = "Transcript saved inside Murmure. Export to the chosen folder failed: \(error.localizedDescription)" }
+            }
         case "failed": updated.state = .failed; updated.message = response.error ?? "Transcription failed. The recording has been kept."
         case "missing": updated.state = .queued; updated.message = "The worker has no copy of this recording. Choose Send / retry over SSH, or process locally."
         case "queued", "running", "receiving": updated.message = nil
         default: throw MurmureError.message("Unknown worker state: \(response.state)")
         }
         try persist(updated)
-        return job.state != .completed && updated.state == .completed
+        let newlyCompleted = job.state != .completed && updated.state == .completed
+        if newlyCompleted, updated.effectiveKind == .recording, settings.summary.automatic, let configuration = job.automaticSummary {
+            startSummary(id: job.id, configuration: configuration, userInitiated: false)
+        }
+        return newlyCompleted
+    }
+
+    private var outputFolder: URL {
+        settings.outputFolder.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/Murmure") : URL(fileURLWithPath: settings.outputFolder)
+    }
+    @objc private func exportMarkdown(_ item: NSMenuItem) {
+        guard let id = item.representedObject as? String, var job = jobs.first(where: { $0.id == id }), let path = job.transcriptPath else { return }
+        do {
+            var text = try String(contentsOfFile: path, encoding: .utf8)
+            if URL(fileURLWithPath: path).pathExtension.lowercased() != "md" { text = "# Transcript\n\n" + text }
+            let exported = try MarkdownWorkflow.writeUnique(text, to: outputFolder.appendingPathComponent(MarkdownWorkflow.filename(for: job)))
+            job.exportedTranscriptPath = exported.path; try persist(job)
+            NSWorkspace.shared.activateFileViewerSelecting([exported])
+        } catch { showError(error) }
+    }
+    @objc private func summarizeFromMenu(_ item: NSMenuItem) {
+        if let id = item.representedObject as? String { startSummary(id: id, configuration: settings.summary, userInitiated: true) }
+    }
+    private func startSummary(id: String, configuration: SummarySettings, userInitiated: Bool) {
+        guard summaryTasks[id] == nil else { return }
+        summaryTasks[id] = Task { [weak self] in
+            guard let self else { return }
+            defer { summaryTasks.removeValue(forKey: id); refreshVisibleMenu() }
+            guard var job = jobs.first(where: { $0.id == id }), job.state == .completed, let original = job.exportedTranscriptPath ?? job.transcriptPath else { return }
+            do {
+                let source = try String(contentsOfFile: original, encoding: .utf8)
+                job.summary = SummaryRecord(state: .running, provider: configuration.provider); try persist(job)
+                let text = try await SummaryService.run(settings: configuration, transcript: source, title: URL(fileURLWithPath: original).lastPathComponent)
+                try Task.checkCancellation()
+                guard var current = jobs.first(where: { $0.id == id }) else { return }
+                let internalFile = try MarkdownWorkflow.writeUnique(text, to: repository.directory(for: id).appendingPathComponent("summary.md"))
+                var result = SummaryRecord(state: .completed, provider: configuration.provider); result.path = internalFile.path
+                if let exported = current.exportedTranscriptPath {
+                    do { result.exportedPath = try MarkdownWorkflow.writeUnique(text, to: URL(fileURLWithPath: exported).deletingPathExtension().appendingPathExtension("summary.md")).path }
+                    catch { result.error = "Summary saved inside Murmure; export failed: \(error.localizedDescription)" }
+                }
+                current.summary = result; try persist(current)
+                if userInitiated { presentSummary(id: id) }
+            } catch {
+                if var current = jobs.first(where: { $0.id == id }) {
+                    current.summary = SummaryRecord(state: error is CancellationError ? .interrupted : .failed, provider: configuration.provider)
+                    current.summary?.error = error is CancellationError ? "Summarization cancelled. The original transcript is kept." : error.localizedDescription
+                    try? persist(current)
+                }
+                if userInitiated, !(error is CancellationError) { showError(error) }
+            }
+        }
+    }
+    @objc private func openSummary(_ item: NSMenuItem) {
+        if let id = item.representedObject as? String { presentSummary(id: id) }
+    }
+    private func presentSummary(id: String) {
+        guard var job = jobs.first(where: { $0.id == id }), let path = job.summary?.path else { return }
+        do {
+            transcriptWindow?.close()
+            transcriptWindow = TranscriptWindow(text: try String(contentsOfFile: path, encoding: .utf8), file: URL(fileURLWithPath: path))
+            transcriptWindow?.window?.title = "Murmure Summary"
+            transcriptWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
+            job.summary?.viewedAt = Date(); try persist(job)
+        } catch { showError(error) }
+    }
+    @objc private func showSummaryError(_ item: NSMenuItem) {
+        if let id = item.representedObject as? String, let error = jobs.first(where: { $0.id == id })?.summary?.error { showInformation(error) }
     }
 
     @objc private func showSettings(_ sender: Any?) {

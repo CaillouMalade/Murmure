@@ -28,6 +28,10 @@ public final class JobRepository {
     }
     public static func recovered(_ job: RecordingJob) -> RecordingJob {
         var recovered = job
+        if recovered.summary?.state == .running {
+            recovered.summary?.state = .interrupted
+            recovered.summary?.error = "Summarization was interrupted. The original transcript is kept; retry manually."
+        }
         switch job.state {
         case .recording, .preparing:
             recovered.state = .interrupted; recovered.message = "Recording stopped before audio was finalized. Original capture files are kept in its folder."

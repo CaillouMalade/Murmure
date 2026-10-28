@@ -38,7 +38,20 @@ public struct AppSettings: Codable, Sendable {
     public var remote = WorkerEndpoint()
     public var localPython = ""
     public var outputFolder = ""
+    public var dictation = DictationSettings()
+    public var summary = SummarySettings()
     public init() {}
+    private enum CodingKeys: String, CodingKey { case source, options, remote, localPython, outputFolder, dictation, summary }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        source = try values.decodeIfPresent(AudioSource.self, forKey: .source) ?? .microphone
+        options = try values.decodeIfPresent(TranscriptionOptions.self, forKey: .options) ?? TranscriptionOptions()
+        remote = try values.decodeIfPresent(WorkerEndpoint.self, forKey: .remote) ?? WorkerEndpoint()
+        localPython = try values.decodeIfPresent(String.self, forKey: .localPython) ?? ""
+        outputFolder = try values.decodeIfPresent(String.self, forKey: .outputFolder) ?? ""
+        dictation = try values.decodeIfPresent(DictationSettings.self, forKey: .dictation) ?? DictationSettings()
+        summary = try values.decodeIfPresent(SummarySettings.self, forKey: .summary) ?? SummarySettings()
+    }
 }
 
 public enum JobState: String, Codable, Sendable {
@@ -70,12 +83,20 @@ public struct RecordingJob: Codable, Identifiable, Sendable {
     public var localWorkerRoot: String?
     public var transcriptViewedAt: Date?
     public var duration: Double?
+    public var kind: JobKind?
+    public var exportedTranscriptPath: String?
+    public var automaticSummary: SummarySettings?
+    public var summary: SummaryRecord?
+    public var effectiveKind: JobKind { kind ?? .recording }
     public var hasUnreadTranscript: Bool { state == .completed && transcriptViewedAt == nil }
+    public var hasUnreadSummary: Bool { summary?.state == .completed && summary?.viewedAt == nil }
     public init(source: AudioSource, options: TranscriptionOptions) {
         id = UUID().uuidString.lowercased(); createdAt = Date()
         self.source = source; self.options = options; state = .recording
     }
 }
+
+public enum JobKind: String, Codable, Sendable { case recording, dictation }
 
 public struct Segment: Codable, Equatable, Sendable {
     public var start: Double
