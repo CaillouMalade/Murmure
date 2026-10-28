@@ -56,7 +56,8 @@ final class SettingsTests: XCTestCase {
             content.layoutSubtreeIfNeeded(); XCTAssertFalse(window.isVisible)
             let banner = try XCTUnwrap(content.subviews.compactMap { $0 as? NSBox }.first)
             let notice = try XCTUnwrap(banner.contentView?.subviews.compactMap { $0 as? NSTextField }.first)
-            XCTAssertGreaterThan(notice.frame.height, 20); XCTAssertTrue(notice.stringValue.contains("avoid inserting it twice"))
+            let required = (notice.stringValue as NSString).boundingRect(with: NSSize(width: notice.bounds.width, height: .greatestFiniteMagnitude), options: .usesLineFragmentOrigin, attributes: [.font: try XCTUnwrap(notice.font)]).height
+            XCTAssertGreaterThanOrEqual(notice.frame.height, ceil(required)); XCTAssertTrue(notice.stringValue.contains("avoid inserting it twice"))
             if let directory = ProcessInfo.processInfo.environment["MURMURE_SNAPSHOT_DIR"] {
                 try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
                 let bitmap = try XCTUnwrap(content.bitmapImageRepForCachingDisplay(in: content.bounds))

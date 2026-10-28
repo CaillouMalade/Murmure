@@ -24,7 +24,7 @@ final class TranscriptWindow: NSWindowController {
             content.addSubview(scroll); content.addSubview(buttons)
             if let notice, !notice.isEmpty {
                 let label = NSTextField(wrappingLabelWithString: notice); label.textColor = .labelColor; label.font = .systemFont(ofSize: 12)
-                let banner = NSBox(); banner.boxType = .custom; banner.borderType = .noBorder; banner.fillColor = .controlBackgroundColor
+                let banner = NSBox(); banner.boxType = .custom; banner.borderType = .noBorder; banner.isTransparent = false; banner.fillColor = .controlBackgroundColor
                 banner.contentViewMargins = .zero
                 label.translatesAutoresizingMaskIntoConstraints = false; banner.translatesAutoresizingMaskIntoConstraints = false
                 content.addSubview(banner)
