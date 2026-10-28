@@ -139,3 +139,5 @@ A separate opt-in real-model test passed on Windows with synthetic English speec
 See [PROJECT_STATE.md](PROJECT_STATE.md), [CHANGELOG.md](CHANGELOG.md), and the [worker protocol](docs/PROTOCOL.md).
 
 The [v0.3.0 validation record](docs/VALIDATION_V3.md) links the passing build, inspected download and remaining real-Mac checks, including the native capsule preview.
+
+The [v0.4.0 validation record](docs/VALIDATION_V4.md) records the exact passing source, synthetic audio recovery/mixing, real offline model checks and inspected app/worker ZIPs. Live native interaction, server setup and energy measurements remain separate from these automated checks.
