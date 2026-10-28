@@ -2,6 +2,13 @@ import XCTest
 @testable import MurmureCore
 
 final class WorkflowTests: XCTestCase {
+    func testInvalidModelLanguageCombinationFailsBeforeRecording() throws {
+        var options = TranscriptionOptions(); options.model = "tiny.en"; options.language = "fr"
+        XCTAssertThrowsError(try options.validate())
+        options.model = "small"; XCTAssertNoThrow(try options.validate())
+        options.language = "French"; XCTAssertThrowsError(try options.validate())
+        options.language = ""; XCTAssertNoThrow(try options.validate())
+    }
     func testV3DictationUpgradePreservesLegacyShortcutAndAddsNewDefaults() throws {
         let data = Data(#"{"dictation":{"enabled":false,"backend":"onDevice","gesture":"toggle","copyToClipboard":true,"shortcut":{"keyCode":49,"control":true,"option":true,"command":false,"shift":false,"keyLabel":"Space"}}}"#.utf8)
         var settings = try JSONDecoder().decode(AppSettings.self, from: data)

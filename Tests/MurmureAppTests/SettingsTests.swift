@@ -55,6 +55,7 @@ final class SettingsTests: XCTestCase {
             defer { window.close() }
             content.layoutSubtreeIfNeeded(); XCTAssertFalse(window.isVisible)
             if let directory = ProcessInfo.processInfo.environment["MURMURE_SNAPSHOT_DIR"] {
+                try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
                 let bitmap = try XCTUnwrap(content.bitmapImageRepForCachingDisplay(in: content.bounds))
                 content.cacheDisplay(in: content.bounds, to: bitmap)
                 try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: URL(fileURLWithPath: directory).appendingPathComponent("dictation-recovery.png"))

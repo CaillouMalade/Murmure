@@ -122,7 +122,8 @@ final class SettingsWindow: NSWindowController, NSWindowDelegate {
         value.options.model = model.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); value.options.language = language.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         value.options.device = device.titleOfSelectedItem ?? "auto"
         value.remote = WorkerEndpoint(host: host.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), python: python.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), script: script.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), root: root.stringValue.trimmingCharacters(in: .whitespacesAndNewlines))
-        value.localPython = localPython.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); value.outputFolder = folder.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        value.localPython = (localPython.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
+        value.outputFolder = (folder.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
         value.dictation.enabled = enabled.state == .on; value.dictation.copyToClipboard = copy.state == .on
         value.dictation.insertAtCursor = insert.state == .on; value.dictation.timeoutSeconds = timeoutChoices[max(0, timeout.indexOfSelectedItem)]
         value.dictation.backend = DictationBackend.allCases[max(0, backend.indexOfSelectedItem)]; value.dictation.gesture = DictationGesture.allCases[max(0, gesture.indexOfSelectedItem)]
@@ -134,8 +135,10 @@ final class SettingsWindow: NSWindowController, NSWindowDelegate {
     @objc private func save() {
         let value = draft()
         do {
+            try value.options.validate()
             if !value.remote.host.isEmpty { _ = try SSHCommand.arguments(for: value.remote) }
             guard !value.options.model.isEmpty, !value.remote.root.isEmpty else { throw MurmureError.message("Enter a model and a worker data folder.") }
+            guard value.outputFolder.isEmpty || value.outputFolder.hasPrefix("/") else { throw MurmureError.message("Choose a full Markdown folder path, or leave it empty for ~/Documents/Murmure.") }
             guard !value.dictation.enabled || value.dictation.shortcut.hasModifier else { throw MurmureError.message("Use Control, Option or Command in the dictation shortcut.") }
             if value.summary.automatic {
                 _ = try SummaryService.executable(settings: value.summary)
@@ -189,6 +192,10 @@ final class SettingsWindow: NSWindowController, NSWindowDelegate {
     @objc private func prepareLocalModel() { prepareModel(locally: true) }
     private func prepareModel(locally: Bool) {
         let value = draft(), destination = locally ? "this Mac" : "SSH server \(value.remote.host)"
+        do {
+            try value.options.validate()
+            if !locally { _ = try SSHCommand.arguments(for: value.remote) }
+        } catch { feedback.stringValue = error.localizedDescription; return }
         let alert = NSAlert(); alert.messageText = "Prepare \(value.options.model) on \(destination)?"
         alert.informativeText = "Missing model files will be downloaded there from Hugging Face. This uses network, disk space and temporarily its processor/memory. A short silence checks audio decoding.\(value.options.diarization ? " The speaker-label model will also be loaded using that computer's existing Hugging Face access." : "") No recording or transcript is sent. Large models can take several minutes."
         alert.addButton(withTitle: "Download & check"); alert.addButton(withTitle: "Cancel")

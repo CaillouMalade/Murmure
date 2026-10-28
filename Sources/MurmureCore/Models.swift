@@ -20,6 +20,16 @@ public struct TranscriptionOptions: Codable, Equatable, Sendable {
     public var language = ""
     public var device = "auto"
     public init() {}
+    public func validate() throws {
+        guard !model.isEmpty, model.count <= 512 else { throw MurmureError.message("Choose a Whisper model name or a CTranslate2 model directory.") }
+        guard language.isEmpty || (language.count <= 8 && language.unicodeScalars.allSatisfy { (97...122).contains($0.value) }) else {
+            throw MurmureError.message("Use an empty language for Automatic, or a code such as en or fr.")
+        }
+        guard !model.hasSuffix(".en") || language.isEmpty || language == "en" else {
+            throw MurmureError.message("An English-only .en model cannot transcribe that language. Choose a multilingual model such as small, or select en.")
+        }
+        guard ["auto", "cpu", "cuda"].contains(device) else { throw MurmureError.message("Select Auto, CPU or CUDA for the worker processor.") }
+    }
 }
 
 public struct WorkerEndpoint: Codable, Hashable, Sendable {
