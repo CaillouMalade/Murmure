@@ -27,4 +27,3 @@ These require a real macOS 15+ session. Native rendering/build checks do not est
 - Select on-device dictation and a supported language; test with networking unavailable. An unavailable local language must fail clearly without silently using a server. Then switch back to SSH; an unavailable/busy remote must fail without launching local inference.
 - Choose a Markdown output folder with spaces and confirm `.md` transcripts, timestamps/speakers, retry after export failure and preservation of an edited existing note. Quick dictation should not create an output-folder note automatically.
 - Configure an already signed-in recent Codex/Claude CLI. Check version, manually summarize a synthetic/public transcript and verify the custom template and adjacent `*.summary.md`. Test signed-out/error cases. Turn automatic handoff on for a new recording, off while another summary is queued, and cancel/restart without automatic resending. Original transcripts must remain intact.
-

@@ -125,3 +125,5 @@ CI tests the worker protocol without models or credentials, verifies actual Wind
 A separate opt-in real-model test passed on Windows with synthetic English speech encoded to M4A, the `tiny.en` model and CPU/int8. It submitted through the worker protocol, waited for the actual detached process and fetched the transcript; no inference modules were faked. This establishes that basic worker path, not speaker-label accuracy or real Mac recording. To repeat with synthetic audio of your own, use the worker venv to run `scripts/smoke-worker.py --audio /path/to/synthetic.wav --root /path/to/test-output`. It downloads a public model on first use. CI's runtime checks install the dependencies and decode generated silence; CI does not download model weights.
 
 See [PROJECT_STATE.md](PROJECT_STATE.md), [CHANGELOG.md](CHANGELOG.md), and the [worker protocol](docs/PROTOCOL.md).
+
+The [v0.3.0 validation record](docs/VALIDATION_V3.md) links the passing build, inspected download and remaining real-Mac checks, including the native capsule preview.
