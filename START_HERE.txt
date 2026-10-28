@@ -1,0 +1,62 @@
+Murmure 0.4.0 development build — macOS 15 or later
+
+ON THE MAC
+1. Unzip Murmure-0.4.0-macOS.zip and move Murmure.app to Applications.
+   This build is unsigned and not notarized. If macOS blocks it, review the
+   app under System Settings > Privacy & Security before opening it.
+2. The app opens Setup on a fresh install. It records only when you start it.
+   The Mac needs no Python or Whisper model when transcription uses SSH.
+
+ON THE PROCESSING COMPUTER (G14, OR YOUR OWN SERVER)
+3. Extract Murmure-0.4.0-worker.zip to a permanent folder without spaces,
+   e.g. C:/Murmure on Windows. The ZIP contains a folder named Murmure-worker;
+   use that folder itself as your permanent worker folder.
+4. Install Python 3.12 on Windows (3.11/3.12 on Mac/Linux).
+   In PowerShell, from that worker folder:
+       powershell -NoProfile -File scripts/setup-worker.ps1
+   On Mac/Linux, from that worker folder:
+       bash scripts/setup-worker.sh
+   The script installs a separate .venv, checks decoding and prints the two
+   paths to enter in the Mac app. It does not install SSH or download a model.
+   If your PowerShell policy blocks the script, follow README.md's individual
+   venv/pip commands; do not weaken your system's policy.
+
+BACK ON THE MAC
+5. Use your normal key-based SSH setup. In Terminal, connect to the alias once
+   and verify its host fingerprint. Murmure preserves strict host checking.
+6. Enter that alias and the printed Python/worker paths in Setup. Choose a
+   permanent remote data folder and select Test SSH connection.
+7. Choose a Whisper model. small is the default multilingual starting point;
+   tiny/base favor speed, medium/large-v3 use more resources. You can enter an
+   existing CTranslate2 model directory on the processing computer instead.
+   Select CPU for the simplest first check; Auto/CUDA require compatible GPU
+   runtime libraries on the server. Explicit fr/en can help short dictation.
+8. Choose Download & check SSH model. Approve the download on the server,
+   wait for its actual audio check to pass, then Save. No model stays loaded.
+
+FIRST TRY
+9. Click the menu-bar icon, speak, then click again to save a normal recording.
+   Use right-click > Check results to fetch the transcript. Recording files
+   and Markdown notes stay saved. Dictation has its own history submenu.
+10. New installations use Control + Shift + Space: hold, speak, release.
+    Upgrades preserve your shortcut. Grant Microphone/Accessibility access if
+    requested, return to a disposable text field and invoke it again.
+    The app never presses Return or Send. A changed or unsupported field gets
+    a Copy window. For unconfirmed delivery, inspect the field before Copy.
+11. Dictation settings let you disable cursor insertion and use Copy without
+    Accessibility permission. Clipboard copying is a separate opt-in.
+    SSH processing defaults to a 3-minute timeout after speaking; you can
+    choose up to 30 minutes. Prepare the model before quick dictation.
+
+OPTIONAL
+- Long-recording local fallback needs the worker environment on the Mac and
+  its Local Python path in Setup. Prepare the model with the local button.
+- Local quick dictation uses Apple's on-device recognition, not Python.
+- Speaker labels need the separate diarization requirements, FFmpeg and
+  Community-1 model access on the processing computer. See README.md.
+- CLI summaries remain off until configured and enabled. They use your own
+  signed-in Codex/Claude CLI account and its normal usage/billing.
+
+The server must already be reachable and awake; Murmure does not configure it.
+Real Mac permissions, capture, editor behavior and energy use still need your
+trial. Automated builds and synthetic audio tests do not establish those.

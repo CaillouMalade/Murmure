@@ -11,6 +11,7 @@ final class DictationController {
     private var job: RecordingJob?
     private var configuration: AppSettings?
     private var target: TextInsertionTarget?
+    private var copyReason: String?
     private var session = UUID()
     private var operation: Task<Void, Never>?
     private var meter: Timer?
@@ -43,13 +44,19 @@ final class DictationController {
                     guard granted else { throw MurmureError.message("Allow Microphone access for Murmure in System Settings.") }
                     prompted = true
                 }
-                guard TextInsertionTarget.requestPermission() else { throw MurmureError.message("Allow Murmure in System Settings → Privacy & Security → Accessibility, then return to your text field and try again.") }
+                if settings.dictation.insertAtCursor {
+                    guard TextInsertionTarget.requestPermission() else { throw MurmureError.message("Allow Murmure in System Settings → Privacy & Security → Accessibility, then return to your text field and try again. You can also turn off cursor insertion in Dictation settings to use a Copy window without this permission.") }
+                }
                 if settings.dictation.backend == .onDevice {
                     let speechPrompt = try await OnDeviceRecognizer.authorize(); prompted = prompted || speechPrompt
                 }
                 try Task.checkCancellation()
                 guard !prompted else { throw MurmureError.message("Dictation permissions are ready. Return to your text field and press the shortcut again.") }
-                target = try TextInsertionTarget.capture()
+                target = nil; copyReason = nil
+                if settings.dictation.insertAtCursor {
+                    do { target = try TextInsertionTarget.capture() }
+                    catch TextTargetError.unsupported { copyReason = "This editor does not expose a verifiable text cursor. Nothing was inserted; use Copy to place your dictation." }
+                } else { copyReason = "Cursor insertion is off. Use Copy to place your dictation." }
                 var options = settings.options; options.diarization = false; options.timestamps = false
                 var recording = RecordingJob(source: .microphone, options: options)
                 recording.kind = .dictation; recording.endpoint = settings.dictation.backend == .ssh ? settings.remote : nil
@@ -78,15 +85,17 @@ final class DictationController {
         operation = Task { [weak self] in
             guard let self else { return }
             do {
-                let audio = try await recorder.stop()
+                let capture = try await recorder.stop()
+                let audio = capture.audio
+                recording.captureWarning = capture.warning
                 recording.duration = max(0, Date().timeIntervalSince(recording.createdAt))
                 recording.state = .preparing; job = recording; try saved?(recording)
                 let transcript: Transcript
                 if settings.dictation.backend == .ssh {
                     let client = WorkerClient(endpoint: settings.remote, localPython: "", localRoot: repository.separateLocalWorkerRoot)
-                    let response = try await client.request(op: "transcribe", job: recording, audio: audio)
+                    let response = try await client.request(op: "transcribe", job: recording, audio: audio, timeout: TimeInterval(settings.dictation.timeoutSeconds))
                     guard response.state == "completed", let result = response.transcript else {
-                        throw MurmureError.message(response.error ?? "Dictation did not finish. Update the remote worker to v0.3.0 and check its model setup.")
+                        throw MurmureError.message(response.error ?? "Dictation did not finish. Update the remote worker to v0.4.0 and prepare the selected model in Setup.")
                     }
                     transcript = result
                 } else { transcript = try await onDevice.transcribe(audio, language: settings.options.language) }
@@ -99,18 +108,19 @@ final class DictationController {
                 try JSONEncoder().encode(transcript).write(to: directory.appendingPathComponent("transcript.json"), options: .atomic)
                 recording.state = .completed; recording.transcriptPath = file.path
                 job = recording; try saved?(recording)
-                var insertionError: Error?
-                do {
-                    guard let target else { throw MurmureError.message("The original field is unavailable. Copy your dictation from Murmure.") }
-                    let confirmed = try target.insert(text)
-                    if confirmed { recording.transcriptViewedAt = Date() }
-                    else { recording.message = "Text was delivered to the original editor; it did not confirm insertion. Check the field before using Copy." }
-                } catch { insertionError = error; recording.message = error.localizedDescription }
+                var needsCopy = true
+                if let target {
+                    do {
+                        let confirmed = try target.insert(text)
+                        if confirmed { recording.transcriptViewedAt = Date(); needsCopy = false }
+                        else { recording.message = "The editor did not confirm text insertion. Check the original field before using Copy to avoid inserting it twice." }
+                    } catch { recording.message = error.localizedDescription }
+                } else { recording.message = copyReason ?? "Nothing was inserted. Your dictation is ready to copy." }
                 if settings.dictation.copyToClipboard { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
                 job = recording; try saved?(recording)
                 reset(token: token)
                 // A changed focus never triggers insertion in a different field.
-                if insertionError != nil { resultNeedsCopy?(recording.id) }
+                if needsCopy { resultNeedsCopy?(recording.id) }
             } catch { finishFailure(error, token: token) }
         }
     }
@@ -142,6 +152,6 @@ final class DictationController {
     private func reset(token: UUID) {
         guard token == session else { return }
         session = UUID(); meter?.invalidate(); meter = nil
-        job = nil; target = nil; configuration = nil; operation = nil; cancelling = false; phase = .idle
+        job = nil; target = nil; copyReason = nil; configuration = nil; operation = nil; cancelling = false; phase = .idle
     }
 }

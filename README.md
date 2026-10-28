@@ -6,7 +6,7 @@ Click the menu-bar icon to record; it turns red. Click again to stop, save the a
 
 Recording transcripts are saved as JSON and Markdown beside the audio, exported as `.md` to `~/Documents/Murmure` or your chosen folder, and open in a small window with Copy. Optional Codex/Claude Code summaries are separate Markdown files beside the exported transcript. Existing notes are never overwritten. Recordings are retained; this version does not automatically delete them.
 
-## Development build: 0.3.0
+## Development build: 0.4.0
 
 Requires macOS 15 or later. The app is native Swift/AppKit with no third-party app dependencies. The optional Python/model environment is separate and can live entirely on the remote computer. No model is loaded by the menu-bar app at idle.
 
@@ -18,13 +18,25 @@ bash scripts/build-app.sh
 open dist/Murmure.app
 ```
 
-The script builds both Apple Silicon and Intel binaries and packages `dist/Murmure-0.3.0-macOS.zip`. It does not install models, modify SSH, sign or notarize the app. Tags `v0.1.0` and `v0.2.0` preserve the earlier milestones, including COS's [recorded review](docs/REVIEW_V1.md). V0.3.0 adds the requested dictation and Markdown/agent workflow; [scope and sources](docs/V0.3_SCOPE.md) distinguish the reference behavior from native checks still needed.
+The script builds both Apple Silicon and Intel binaries and packages `dist/Murmure-0.4.0-macOS.zip` plus a separate `dist/Murmure-0.4.0-worker.zip`. It does not install models, modify SSH, sign or notarize the app. [START_HERE.txt](START_HERE.txt) gives the first-download setup order. Earlier tags preserve the prior builds, including v0.3.0 for comparison. The [council review and v0.4 decisions](docs/REVIEW_V3.md) record what changed and what was deferred.
+
+## First run and model choice
+
+The Mac needs **no Python or Whisper install when using SSH**. Install the worker environment and chosen model on the processing computer instead. A fresh app opens **Settings → Setup**: install the worker, verify SSH, select a model, choose **Download & check SSH model**, wait for its audio check, then Save. The separate worker ZIP avoids needing a Git checkout on the server. Extract its `Murmure-worker` folder to a permanent simple path, such as `C:/Murmure`.
+
+The Setup page offers editable model presets: `tiny`, `base`, `small` (default), `medium`, `large-v3` and `turbo`. These are multilingual; `.en` variants are English-only. Smaller models generally favor speed and larger models use more resources; model names are options, not a measured accuracy/latency promise. An existing CTranslate2 model directory on the processing computer is also accepted. Short French/English dictations may benefit from explicitly setting `fr` or `en`.
+
+Model preparation explicitly downloads missing weights on the chosen computer, loads the selected CPU/GPU implementation and transcribes generated silence to catch audio/GPU runtime errors before the first recording. It takes the same worker engine lock and refuses promptly while another job is active. The process exits afterwards; models are never kept loaded at idle. Select CPU if CUDA/cuDNN is not configured. If Label speakers is enabled, preparation also checks access to its optional Community-1 pipeline, but does not establish diarization quality.
+
+Model checks can be cancelled and time out after 30 minutes; downloaded cache files remain. Quick dictation uses cached model files and reports a setup error instead of silently starting a first-use download. Deferred long recordings retain their existing first-use download behavior. The app and worker should both be v0.4.0 for the new setup operation.
 
 ## Set up the processing computer
 
 The worker works on Windows, Linux and macOS with Python 3.11 or 3.12 recommended. Use a simple checkout path without spaces for the executable and script paths, such as `C:/Murmure` on Windows or `/home/you/Murmure` on Linux. The data folder may contain spaces.
 
 Install the repository and a separate environment **on the computer that will do transcription**:
+
+The worker ZIP or checkout includes `scripts/setup-worker.ps1` (Windows, Python 3.12) and `scripts/setup-worker.sh` (Mac/Linux). Run the appropriate script from that folder to create its `.venv`, install pinned worker requirements, check real runtime decoding and print the Settings paths. It does not configure SSH or download model weights. If script execution is restricted, use the individual commands below rather than changing your system policy.
 
 ```bash
 python -m venv .venv
@@ -60,7 +72,7 @@ Connect in Terminal once and verify the host fingerprint yourself. Murmure uses 
 
 In Murmure Settings, enter your SSH alias, the remote Python executable, and the full remote worker script path. Windows example: `C:/Murmure/.venv/Scripts/python.exe` and `C:/Murmure/worker/murmure_worker.py`. Linux example: `/home/you/Murmure/.venv/bin/python` and `/home/you/Murmure/worker/murmure_worker.py`. Keep these two paths free of spaces and shell punctuation. Use an explicit venv path, rather than a Windows Store `python3` alias. **Test SSH connection** distinguishes missing worker dependencies from a successful connection, but it does not load or verify model weights. Then choose **Save**.
 
-On Windows, deferred recording jobs request `CREATE_BREAKAWAY_FROM_JOB` so they can survive the SSH session closing. An administrator/embedding host may forbid it; in that case Murmure fails clearly and keeps the recording. It never changes that policy or installs a scheduled task. Update the remote worker to **0.3.0** as well as the Mac app: quick dictation needs the new foreground operation. Controlled Windows lifetime tests pass; a real Mac-to-G14 SSH/model test remains part of setup.
+On Windows, deferred recording jobs request `CREATE_BREAKAWAY_FROM_JOB` so they can survive the SSH session closing. An administrator/embedding host may forbid it; in that case Murmure fails clearly and keeps the recording. It never changes that policy or installs a scheduled task. Update the remote worker to **0.4.0** as well as the Mac app: model preparation uses a new operation, and quick dictation now requires cached weights. Controlled Windows lifetime tests pass; a real Mac-to-G14 SSH/model test remains part of setup.
 
 ## Local fallback
 
@@ -68,13 +80,13 @@ To process on your Mac, create a local Python environment with the same worker r
 
 ## Quick dictation
 
-The default shortcut is **Control + Option + Space**, held while speaking. Release it to finish. Under **Settings → Dictation**, record another key combination, choose hold or toggle, and select **SSH** (default) or **On this Mac**. A right-click menu action can also start/finish/cancel dictation. The menu bar becomes a small black capsule with six white bars: microphone levels while listening, a gentle travelling wave while processing. Reduce Motion uses static bars. There is no live text preview and no animation or meter timer at idle.
+On new installations the default shortcut is **Control + Shift + Space** (upgrades preserve the existing shortcut), held while speaking. Release it to finish. Under **Settings → Dictation**, record another key combination, choose hold or toggle, and select **SSH** (default) or **On this Mac**. A right-click menu action can also start/finish/cancel dictation. The menu bar becomes a small black capsule with six white bars: microphone levels while listening, a gentle travelling wave while processing. Reduce Motion uses static bars. There is no live text preview and no animation or meter timer at idle.
 
-After processing, Murmure replaces the original text selection or inserts at the captured cursor. It does not press Return or Send. Accessibility permission is needed for this action; normal recording does not need it. The original app, field, selection and readable text must remain unchanged. If they change, or a password field is focused, Murmure keeps the result for Copy instead. Editors without an accessible cursor cannot be targeted. Some editors need Unicode key events instead of an accessibility edit; the history records when delivery could not be confirmed, so check the field before copying it again.
+After processing, Murmure replaces the original text selection or inserts at the captured cursor. It does not press Return or Send. Accessibility permission is needed for this action; normal recording does not need it. The original app, field, selection and readable text must remain unchanged. A password field rejects dictation before recording. Unsupported/unreadable editors can still be dictated into using a Copy window. If the field or cursor changes while processing, nothing is inserted there and a recovery window appears. Accessibility edits are read back against the expected text; Unicode-key delivery remains unconfirmed. The recovery window warns you to inspect the original field before copying twice and opens without activating Murmure. Turn off cursor insertion in Dictation settings for an explicit Copy-only workflow without Accessibility access.
 
 The first permission request may change focus; Murmure asks you to return to your field and invoke the shortcut again before recording. **Also copy finished dictation to the clipboard** is a separate option, off by default. Otherwise the clipboard is untouched. Dictation results/audio remain in internal history for recovery; utterances do not automatically create notes in the output folder or invoke a CLI summary. A failed/interrupted dictation can be transcribed manually from history; it will never insert later into a stale target after restart.
 
-SSH dictation uploads after stopping, waits on that one connection for the result (up to three minutes), and closes it. It fails promptly when another job holds the worker's model lock. There is no silent local fallback or model kept loaded between utterances. Cold model loading and SSH startup affect response time; choose a smaller model or a supported GPU for faster remote results. Local dictation uses Apple's on-device speech recognition for the selected language, without installing Whisper. If the language/model is unavailable locally, it reports an error instead of sending audio to Apple's servers. Speech Recognition permission is requested only for that local choice.
+SSH dictation uploads after stopping, waits on that one connection for the result, and closes it. Its processing timeout defaults to three minutes and is adjustable from one to thirty minutes under Dictation; this is not a recording-duration limit. A missing cached model fails with a Setup instruction, rather than downloading during dictation. It fails promptly when another job holds the worker's model lock. There is no silent local fallback or model kept loaded between utterances. Cold model loading and SSH startup affect response time; choose a smaller model or a supported GPU for faster remote results. Local dictation uses Apple's on-device speech recognition for the selected language, without installing Whisper. If the language/model is unavailable locally, it reports an error instead of sending audio to Apple's servers. Speech Recognition permission is requested only for that local choice.
 
 The command interface uses the registered URL scheme. From a Mac terminal or shortcut, use background opening to keep the target app focused:
 
@@ -99,14 +111,14 @@ The app sends the transcript and template through stdin without a shell and capt
 
 - Microphone capture requests Microphone access only when starting a recording that needs it.
 - Mac audio capture uses Apple's ScreenCaptureKit and requires Screen & System Audio Recording permission. It uses an audio output only and saves no video. A permission change may require restarting the app.
-- The combined source aligns the two recordings using host-clock start times, then mixes them to a single M4A file. Use headphones for calls to avoid the microphone picking up speaker audio twice.
+- The combined source aligns the two recordings using host-clock start times, then mixes them to a single M4A file. Transient writer backpressure drops only the affected system samples and records a warning. If system finalization or mixing fails, a valid microphone track is finalized instead with an explicit warning retained in history and exported Markdown. Original capture tracks are preserved. Failed/interrupted history entries with readable capture tracks also offer explicit Recover actions; recovery does not submit or insert anything. Use headphones for calls to avoid the microphone picking up speaker audio twice.
 - No recording starts automatically. The Mac is kept awake only during recording; that assertion ends when recording stops. Models and SSH processes run only when needed.
 
 ## Deferred work and recovery
 
 Uploads use bounded-size chunks rather than loading an entire recording into memory. A submitted remote job detaches from SSH, so it can continue if the Mac sleeps, disconnects or quits. One model job runs at a time per worker data folder.
 
-There is no timer checking job status. Results are checked on app launch, Mac wake, opening the options menu and **Check results**. A discovered unread transcript changes the menu-bar icon to a speech bubble and marks its row New. **Check results** opens the latest unread transcript; passive launch/wake checks don't interrupt you with a window. If a worker is unreachable, the app tries it once per check rather than once per pending job. The app intentionally does not keep a live connection or promise an immediate completion notification. The remote computer must itself remain awake to process jobs.
+There is no timer checking job status. Results are checked on app launch, Mac wake, opening the options menu and **Check results**. Recordings keep their own recent rows and an Older recordings submenu; dictations have a separate history submenu. All older entries retain their actions. A discovered unread transcript changes the menu-bar icon to a speech bubble and marks its row New. **Check results** opens the latest unread transcript; passive launch/wake checks don't interrupt you with a window. If a worker is unreachable, the app tries it once per check rather than once per pending job. The app intentionally does not keep a live connection or promise an immediate completion notification. The remote computer must itself remain awake to process jobs.
 
 A worker process stopped by a remote reboot is reported as failed/retryable on the next check after a two-minute startup grace, unless a live worker still holds the job's OS lock. Long-running/queued jobs aren't considered failed merely for taking time. There is no periodic heartbeat or automatic restart of an interrupted model job.
 

@@ -19,7 +19,7 @@ import time
 from typing import BinaryIO
 import uuid
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 MAX_HEADER = 16_384
 MAX_AUDIO_BYTES = 16 * 1024**3
 CHUNK = 64 * 1024
@@ -79,6 +79,8 @@ def validated_options(raw: dict) -> dict:
         raise WorkerError("Choose a model name or a local model directory.")
     if not isinstance(language, str) or (language and (not language.isalpha() or len(language) > 8)):
         raise WorkerError("Language must be empty or a language code such as en or fr.")
+    if model.endswith(".en") and language and language != "en":
+        raise WorkerError("An English-only .en model cannot transcribe that language. Choose a multilingual model such as small, or select en.")
     if device not in ("auto", "cpu", "cuda"):
         raise WorkerError("Device must be auto, cpu or cuda.")
     for flag in ("diarization", "timestamps"):
@@ -235,16 +237,68 @@ def assign_speakers(segments: list[dict], turns: list[tuple[float, float, str]])
     return result
 
 
-def transcribe(path: Path, options: dict) -> dict:
+def load_model(options: dict, *, local_files_only: bool = False):
     try:
         import ctranslate2
         from faster_whisper import WhisperModel
     except ImportError as error:
         raise WorkerError("Transcription is not installed in this Python environment. Install worker/requirements.txt first.") from error
     device = options["device"]
-    if device == "auto":
-        device = "cuda" if ctranslate2.get_cuda_device_count() else "cpu"
-    model = WhisperModel(options["model"], device=device, compute_type="float16" if device == "cuda" else "int8", cpu_threads=min(4, os.cpu_count() or 1))
+    try:
+        if device == "auto":
+            device = "cuda" if ctranslate2.get_cuda_device_count() else "cpu"
+        model = WhisperModel(options["model"], device=device, compute_type="float16" if device == "cuda" else "int8",
+                             cpu_threads=min(4, os.cpu_count() or 1), local_files_only=local_files_only)
+        return model, device
+    except Exception as error:
+        if local_files_only:
+            raise WorkerError("The selected model is not ready for dictation. Use Download & check model in Murmure Setup on the same worker account, or select an installed CTranslate2 model directory. If CUDA fails, select CPU and check again.") from error
+        raise WorkerError("The selected Whisper model could not load. Check its name or CTranslate2 directory and the processing computer's network access. For a CUDA setup error, select CPU or install compatible CUDA/cuDNN libraries, then try Download & check model again.") from error
+
+
+def load_diarizer(device: str):
+    try:
+        import torch
+        from pyannote.audio import Pipeline
+    except ImportError as error:
+        raise WorkerError("Speaker labels need worker/requirements-diarization.txt on the processing computer.") from error
+    try:
+        # Credentials remain on the processing computer; never send them from the app.
+        token_file = os.environ.get("MURMURE_HF_TOKEN_FILE")
+        token = Path(token_file).expanduser().read_text(encoding="utf-8").strip() if token_file else True
+        pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-community-1", token=token)
+        pipeline.to(torch.device(device))
+        return pipeline
+    except Exception as error:
+        raise WorkerError("The speaker-label model could not load. Accept the Community-1 model conditions and sign in to Hugging Face on the processing computer; also check its FFmpeg and device setup.") from error
+
+
+def prepare_model(root: Path, options: dict) -> dict:
+    try:
+        with file_lock(root / "engine.lock", blocking=False):
+            model, device = load_model(options)
+            try:
+                # Exercise decoding as well as weight loading: CUDA discovery
+                # alone does not prove the cuDNN runtime is usable.
+                import numpy as np
+                iterator, _ = model.transcribe(np.zeros(16000, dtype=np.float32), language=options["language"] or "en",
+                                              beam_size=1, vad_filter=False)
+                list(iterator)
+            except Exception as error:
+                raise WorkerError("The model loaded but its audio check failed. Check the language and audio runtime; for a CUDA error, select CPU and check again.") from error
+            finally:
+                del model
+            if options["diarization"]:
+                pipeline = load_diarizer(device)
+                del pipeline
+            return {"state": "ready", "version": VERSION, "protocolVersion": 1,
+                    "model": options["model"], "device": device}
+    except LockBusy as error:
+        raise WorkerError("The worker is processing another recording. Wait for it to finish before preparing a model.") from error
+
+
+def transcribe(path: Path, options: dict, *, local_files_only: bool = False) -> dict:
+    model, device = load_model(options, local_files_only=local_files_only)
     iterator, info = model.transcribe(str(path), language=options["language"] or None,
                                      beam_size=5, vad_filter=True, word_timestamps=options["diarization"])
     segments = []
@@ -255,16 +309,7 @@ def transcribe(path: Path, options: dict) -> dict:
         segments.append(segment)
     del model  # Do not retain the transcription model while running diarization.
     if options["diarization"]:
-        try:
-            import torch
-            from pyannote.audio import Pipeline
-        except ImportError as error:
-            raise WorkerError("Speaker labels need worker/requirements-diarization.txt on the processing computer.") from error
-        # Credentials remain on the processing computer; never send them from the app.
-        token_file = os.environ.get("MURMURE_HF_TOKEN_FILE")
-        token = Path(token_file).expanduser().read_text(encoding="utf-8").strip() if token_file else True
-        pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-community-1", token=token)
-        pipeline.to(torch.device(device))
+        pipeline = load_diarizer(device)
         diarized = pipeline(str(path))
         annotation = diarized.exclusive_speaker_diarization
         turns = [(float(turn.start), float(turn.end), label) for turn, _, label in annotation.itertracks(yield_label=True)]
@@ -287,7 +332,7 @@ def run_job(root: Path, identifier: str, *, wait_for_engine: bool = True) -> Non
                 with file_lock(root / "engine.lock", blocking=wait_for_engine):
                     write_status(directory, "running")
                     with contextlib.redirect_stdout(sys.stderr):
-                        result = transcribe(directory / "audio.m4a", read_json(directory / "request.json"))
+                        result = transcribe(directory / "audio.m4a", read_json(directory / "request.json"), local_files_only=not wait_for_engine)
                     atomic_json(directory / "transcript.json", result)
                     write_status(directory, "completed")
             except Exception as error:
@@ -323,7 +368,12 @@ def rpc(source: BinaryIO) -> dict:
     if operation == "probe":
         return {"state": "ready", "version": VERSION, "protocolVersion": 1,
                 "transcriptionInstalled": module_available("faster_whisper"),
-                "diarizationInstalled": module_available("pyannote.audio")}
+                "diarizationInstalled": module_available("pyannote.audio"),
+                "supportsModelPreparation": True}
+    if operation == "prepare":
+        options = validated_options(header.get("options", {}))
+        with contextlib.redirect_stdout(sys.stderr):
+            return prepare_model(root, options)
     if operation == "status":
         return {**status(root, header.get("id")), "protocolVersion": 1}
     if operation == "submit":

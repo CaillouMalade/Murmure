@@ -3,12 +3,14 @@ import ApplicationServices
 import CryptoKit
 import MurmureCore
 
+enum TextTargetError: Error { case unsupported }
+
 @MainActor
 struct TextInsertionTarget {
     private let element: AXUIElement
     private let pid: pid_t
     private let selection: CFRange
-    private let fingerprint: Data?
+    private let fingerprint: Data
 
     static func requestPermission() -> Bool {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
@@ -38,14 +40,20 @@ struct TextInsertionTarget {
         return subrole == (kAXSecureTextFieldSubrole as String)
     }
     static func capture() throws -> TextInsertionTarget {
-        guard AXIsProcessTrusted(), let element = focused(), !secure(element), let selection = range(element) else {
-            throw MurmureError.message("Place the cursor in an editable, non-password text field and try dictation again. Some apps do not expose an accessible text cursor.")
-        }
+        guard AXIsProcessTrusted(), let element = focused() else { throw TextTargetError.unsupported }
+        guard !secure(element) else { throw MurmureError.message("Leave the password field before starting dictation.") }
+        guard let selection = range(element), let fingerprint = digest(element) else { throw TextTargetError.unsupported }
         var pid: pid_t = 0
         guard AXUIElementGetPid(element, &pid) == .success, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
             throw MurmureError.message("The text field is no longer focused. Try dictation again.")
         }
-        return TextInsertionTarget(element: element, pid: pid, selection: selection, fingerprint: digest(element))
+        return TextInsertionTarget(element: element, pid: pid, selection: selection, fingerprint: fingerprint)
+    }
+    static func replacing(_ value: String, selection: CFRange, with text: String) -> String? {
+        let original = value as NSString
+        guard selection.location >= 0, selection.length >= 0,
+              selection.location <= original.length, selection.length <= original.length - selection.location else { return nil }
+        return original.replacingCharacters(in: NSRange(location: selection.location, length: selection.length), with: text)
     }
     func insert(_ text: String) throws -> Bool {
         guard text.utf16.count <= 16_384 else { throw MurmureError.message("This dictation is too long for automatic insertion. Copy the saved text from Murmure.") }
@@ -58,15 +66,20 @@ struct TextInsertionTarget {
         var writable = DarwinBoolean(false)
         if AXUIElementIsAttributeSettable(element, kAXSelectedTextAttribute as CFString, &writable) == .success, writable.boolValue {
             // One accessibility edit replaces only the captured selection.
+            let expected = (Self.attribute(element, kAXValueAttribute as CFString) as? String).flatMap { Self.replacing($0, selection: selection, with: text) }
             let result = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
             guard result == .success else { throw MurmureError.message("This app refused text insertion. Your dictation is ready to copy.") }
-            return true
+            guard let expected else { return false }
+            return Self.digest(element) == Data(SHA256.hash(data: Data(expected.utf8)))
         }
         // Unicode key events support editors without a writable SelectedText.
         // No clipboard replacement, Return key, or Send action is generated.
         guard let source = CGEventSource(stateID: .privateState) else { throw MurmureError.message("Text insertion is unavailable. Copy your dictation from Murmure.") }
         for character in text {
-            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { throw MurmureError.message("Focus changed during insertion. Check the original field before copying the saved dictation.") }
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+                  let current = Self.focused(), CFEqual(element, current), !Self.secure(current) else {
+                throw MurmureError.message("Focus changed during insertion. Check the original field before copying the saved dictation.")
+            }
             let units = Array(String(character).utf16)
             guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) else { continue }
             event.flags = []

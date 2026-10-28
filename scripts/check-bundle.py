@@ -17,6 +17,7 @@ assert any("murmure" in item["CFBundleURLSchemes"] for item in info["CFBundleURL
 assert (app / "Contents/MacOS/Murmure").is_file()
 worker = app / "Contents/Resources/murmure_worker.py"
 assert worker.is_file()
+assert (app / "Contents/Resources/START_HERE.txt").is_file()
 with tempfile.TemporaryDirectory() as directory:
     request = json.dumps({"op": "probe", "root": directory}).encode() + b"\n"
     result = subprocess.run([sys.executable, str(worker), "rpc"], input=request, capture_output=True, check=True)

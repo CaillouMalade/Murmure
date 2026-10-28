@@ -2,6 +2,20 @@
 
 These checks have not yet been performed on Arthur's Mac. CI compilation is a separate check.
 
+## V0.4 first-download and recovery additions
+
+- Keep v0.3.0 for comparison; quit it before launching v0.4.0. Both versions share Application Support and preferences. Back up that folder before downgrading, because the old app does not understand the new capture-warning fields. No automatic data deletion occurs.
+- On a clean preferences profile, verify Setup opens first, its content scrolls, the bundled guide opens and the copy-setup buttons copy commands without installing anything. Confirm no microphone or model is started merely by opening Settings.
+- Install the worker from its separate ZIP on the processing computer, preserving any existing venv. Verify printed paths; probe an older worker and a missing-dependency environment. Strict unknown-host rejection must remain intact. No SSH configuration is performed by the scripts.
+- Prepare a small model, including a CPU check and an incomplete CUDA setup if available. Confirm useful failure text, cancellation and no model process at idle. Enable speaker labels only when its environment and model access are configured; check failures without private credentials in messages.
+- Try SSH dictation with an uncached model: expect a quick Setup instruction and saved audio. Prepare that model, Save, retry with a new phrase. Test the adjustable timeout independently of recording duration and keep the G14's existing server power policy.
+- Verify new preferences use Control + Shift + Space and a v0.3 preference upgrade preserves its existing custom shortcut. If registration fails, Settings should open. Test actual press/release, quick taps and cancellation.
+- Turn cursor insertion off; confirm a Copy window works without Accessibility access. In insertion mode, test an unsupported editor, a changed selection, an unreadable field and an editor that refuses/does not confirm an edit. Recovery must remain visible without activating Murmure; inspect the field before Copy to avoid duplicates. Password fields should reject insertion-mode dictation before recording.
+- Test combined audio and any reproducible disk/system-track failure. A valid microphone track should remain transcribable, with a persistent warning in the transcript window and exported Markdown. Original tracks should remain on disk. From an older failed/interrupted job, explicitly Recover a readable capture and verify it is not submitted or inserted automatically. Unreadable captures must fail without replacing files.
+- Make more than twelve dictations and more than twelve recordings. Recording rows must stay available, Older recordings and Dictation history must retain actions, and unread results should still update correctly. Compare both versions' idle energy/RAM separately.
+
+## Existing recording checks
+
 1. Launch the app from Applications on macOS 15+, approve the development build if macOS asks, and find the icon without a Dock icon appearing.
 2. Record microphone audio for a minute. The icon should stay red, stop on the next click and return to its normal appearance. Verify the saved audio externally for this test; the app has no audio player.
 3. Deny Microphone access and try recording. Confirm a clear error, no red recording indicator and no submitted job. Restore permission and retry.

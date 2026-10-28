@@ -87,6 +87,7 @@ public struct RecordingJob: Codable, Identifiable, Sendable {
     public var exportedTranscriptPath: String?
     public var automaticSummary: SummarySettings?
     public var summary: SummaryRecord?
+    public var captureWarning: String?
     public var effectiveKind: JobKind { kind ?? .recording }
     public var hasUnreadTranscript: Bool { state == .completed && transcriptViewedAt == nil }
     public var hasUnreadSummary: Bool { summary?.state == .completed && summary?.viewedAt == nil }
@@ -145,6 +146,9 @@ public struct WorkerResponse: Decodable, Sendable {
     public var protocolVersion: Int?
     public var transcriptionInstalled: Bool?
     public var diarizationInstalled: Bool?
+    public var supportsModelPreparation: Bool?
+    public var model: String?
+    public var device: String?
 }
 
 public enum MurmureError: LocalizedError {

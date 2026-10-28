@@ -5,7 +5,8 @@ public enum MarkdownWorkflow {
         let date = ISO8601DateFormatter().string(from: job.createdAt)
         let heading = job.effectiveKind == .dictation ? "Dictation" : "Transcript"
         let body = transcript.formatted(timestamps: job.options.timestamps).trimmingCharacters(in: .whitespacesAndNewlines)
-        return "# \(heading)\n\nRecorded: \(date)  \nSource: \(job.source.title)  \nLanguage: \(transcript.language)\n\n## Transcript\n\n\(body)\n"
+        let warning = job.captureWarning.map { "> Capture warning: \($0.replacingOccurrences(of: "\n", with: " "))\n\n" } ?? ""
+        return "# \(heading)\n\nRecorded: \(date)  \nSource: \(job.source.title)  \nLanguage: \(transcript.language)\n\n\(warning)## Transcript\n\n\(body)\n"
     }
     public static func filename(for job: RecordingJob) -> String {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"

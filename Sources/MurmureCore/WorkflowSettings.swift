@@ -13,15 +13,28 @@ public struct DictationSettings: Codable, Equatable, Sendable {
     public var backend = DictationBackend.ssh
     public var gesture = DictationGesture.hold
     public var copyToClipboard = false
+    public var insertAtCursor = true
+    public var timeoutSeconds = 180
     public var shortcut = KeyboardShortcut()
     public init() {}
+    private enum CodingKeys: String, CodingKey { case enabled, backend, gesture, copyToClipboard, insertAtCursor, timeoutSeconds, shortcut }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        backend = try values.decodeIfPresent(DictationBackend.self, forKey: .backend) ?? .ssh
+        gesture = try values.decodeIfPresent(DictationGesture.self, forKey: .gesture) ?? .hold
+        copyToClipboard = try values.decodeIfPresent(Bool.self, forKey: .copyToClipboard) ?? false
+        insertAtCursor = try values.decodeIfPresent(Bool.self, forKey: .insertAtCursor) ?? true
+        timeoutSeconds = min(1800, max(30, try values.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? 180))
+        shortcut = try values.decodeIfPresent(KeyboardShortcut.self, forKey: .shortcut) ?? KeyboardShortcut()
+    }
 }
 public struct KeyboardShortcut: Codable, Equatable, Sendable {
     public var keyCode: UInt32 = 49 // Space
     public var control = true
-    public var option = true
+    public var option = false
     public var command = false
-    public var shift = false
+    public var shift = true
     public var keyLabel = "Space"
     public init() {}
     public var display: String { (control ? "⌃" : "") + (option ? "⌥" : "") + (shift ? "⇧" : "") + (command ? "⌘" : "") + keyLabel }

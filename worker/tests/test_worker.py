@@ -68,13 +68,47 @@ class WorkerTests(unittest.TestCase):
         header = {**self.header(), "op": "transcribe"}
         source = io.BytesIO(json.dumps(header).encode() + b"\n" + b"audio")
         transcript = {"language": "en", "segments": [{"start": 0, "end": 1, "text": " Dictation", "speaker": None}]}
-        with patch.object(worker, "start_detached") as start, patch.object(worker, "transcribe", return_value=transcript):
+        with patch.object(worker, "start_detached") as start, patch.object(worker, "transcribe", return_value=transcript) as transcribe:
             result = worker.rpc(source)
         start.assert_not_called()
         self.assertEqual(result["state"], "completed")
         self.assertEqual(result["transcript"], transcript)
         self.assertEqual(result["protocolVersion"], 1)
         self.assertEqual((self.root / self.identifier / "audio.m4a").read_bytes(), b"audio")
+        self.assertTrue(transcribe.call_args.kwargs["local_files_only"])
+
+    def test_prepare_checks_synthetic_audio_and_optional_diarization_without_job(self):
+        options = worker.validated_options({"model": "small", "language": "fr", "diarization": True})
+        model = types.SimpleNamespace(transcribe=lambda *a, **k: (iter([]), None))
+        numpy = types.SimpleNamespace(zeros=lambda *a, **k: "synthetic-silence", float32="float32")
+        request = {"op": "prepare", "root": str(self.root), "options": options}
+        with patch.object(worker, "load_model", return_value=(model, "cpu")) as load, \
+             patch.object(worker, "load_diarizer") as diarizer, patch.dict(sys.modules, {"numpy": numpy}):
+            result = worker.rpc(io.BytesIO(json.dumps(request).encode() + b"\n"))
+        self.assertEqual(result["state"], "ready")
+        self.assertEqual(result["model"], "small")
+        self.assertEqual(result["device"], "cpu")
+        load.assert_called_once_with(options)
+        diarizer.assert_called_once_with("cpu")
+        self.assertFalse((self.root / self.identifier).exists())
+
+    def test_prepare_refuses_busy_engine_without_loading_a_model(self):
+        with worker.file_lock(self.root / "engine.lock"), patch.object(worker, "load_model") as load:
+            with self.assertRaisesRegex(worker.WorkerError, "processing another recording"):
+                worker.prepare_model(self.root, worker.validated_options({}))
+        load.assert_not_called()
+
+    def test_missing_cached_dictation_model_has_actionable_sanitized_error(self):
+        fake_whisper = types.SimpleNamespace(WhisperModel=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("private-credential")))
+        fake_translate = types.SimpleNamespace(get_cuda_device_count=lambda: 0)
+        with patch.dict(sys.modules, {"faster_whisper": fake_whisper, "ctranslate2": fake_translate}):
+            with self.assertRaisesRegex(worker.WorkerError, "Download & check model") as error:
+                worker.load_model(worker.validated_options({}), local_files_only=True)
+        self.assertNotIn("private-credential", str(error.exception))
+
+    def test_english_only_model_rejects_explicit_other_language(self):
+        with self.assertRaisesRegex(worker.WorkerError, "English-only"):
+            worker.validated_options({"model": "tiny.en", "language": "fr"})
 
     def test_foreground_dictation_fails_fast_when_engine_is_busy(self):
         with patch.object(worker, "start_detached") as start:

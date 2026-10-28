@@ -2,6 +2,17 @@
 
 Versions use SemVer. The first two development milestones are 0.1.0 (v1) and 0.2.0 (reviewed v2); neither is a claim of production readiness.
 
+## 0.4.0 — 2026-10-28
+
+- Apply the relevant council feedback after Arthur's approval; keep the always-awake G14's power policy unchanged.
+- Preserve usable microphone audio after combined-capture failure, disclose dropped samples/partial tracks, keep capture warnings in transcripts and add manual original-track recovery.
+- Separate recording and dictation history while retaining older entries' actions.
+- Add Copy-only dictation and visible, non-activating recovery for unsupported/changed targets or unconfirmed insertion; verify accessibility text changes and retain secure-field guards.
+- Add a Setup tab, model presets/custom paths, explicit remote/local model download/audio checks and a separate worker setup ZIP with a first-download guide.
+- Require cached weights for quick dictation, give actionable preparation/CUDA/version failures and expose its processing timeout (one to thirty minutes).
+- Default new installs to Control + Shift + Space; preserve existing shortcuts/settings and open Settings when shortcut registration fails.
+- Extend worker, settings migration, Markdown warning and native synthetic-audio recovery checks. Real Mac interaction, real SSH, provider inference, diarization quality and energy measurements remain unverified.
+
 ## 0.3.0 — 2026-10-28
 
 - Add configurable hold/toggle dictation shortcuts and `murmure://dictation` start/stop/toggle/cancel commands, with SSH selected by default.

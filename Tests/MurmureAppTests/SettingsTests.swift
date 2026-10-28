@@ -15,9 +15,9 @@ final class SettingsTests: XCTestCase {
                 for child in view.subviews { if let tabs = findTabs(child) { return tabs } }
                 return nil
             }
-            let tabs = try XCTUnwrap(findTabs(content)); XCTAssertEqual(tabs.numberOfTabViewItems, 3)
+            let tabs = try XCTUnwrap(findTabs(content)); XCTAssertEqual(tabs.numberOfTabViewItems, 4)
             XCTAssertFalse(window.isVisible)
-            for (index, name) in ["recordings", "dictation", "summaries"].enumerated() {
+            for (index, name) in ["setup", "recordings", "dictation", "summaries"].enumerated() {
                 tabs.selectTabViewItem(at: index); content.layoutSubtreeIfNeeded()
                 let scroll = try XCTUnwrap(tabs.selectedTabViewItem?.view as? NSScrollView)
                 XCTAssertGreaterThan(scroll.bounds.width, 400); XCTAssertTrue(scroll.hasVerticalScroller)

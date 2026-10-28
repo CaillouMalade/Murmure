@@ -30,7 +30,17 @@ Final v2 source `5415f554246756e951d0c21e5cfdfd1dc17141ab` passed https://github
 
 A live localhost SSH attempt was refused by StrictHostKeyChecking because no trusted ED25519 host key is configured; leave that check intact. No Mac-to-G14 SSH session or diarization test has been performed.
 
-## Current next steps
+## Current v0.4 work (2026-10-28)
+
+Arthur asked for the council before trying v0.3.0, then authorized relevant fixes and anticipating first-download problems. He confirmed the G14 is an always-awake server: do not add power-policy changes. He approved separate histories and wants both old/new versions to compare. Decisions and review limitations are in docs/REVIEW_V3.md; do not request another council review without his request.
+
+V0.4.0 implementation adds explicit model selection/preparation and worker ZIP/setup scripts, preserves usable partial audio with visible warnings/manual recovery, separates histories, improves Copy-only/unconfirmed insertion recovery, and exposes the dictation processing timeout. New installs use Control + Shift + Space; saved shortcuts/settings are preserved. Quick dictation requires cached weights. No model/runtime/server installation or host-key/account change has been performed for Arthur. Existing private-GitHub version/build authorization applies; no release, signing or public push.
+
+Local checks so far: all 25 Windows worker tests pass, PowerShell setup script parses, Python compiles, and an actual offline `prepare` RPC passed with cached public tiny.en CPU/int8 and generated silence using the existing project venv/cache. Native audio recovery, four-tab layout and settings migration tests are authored but await the macOS runner. Do not claim a passing v0.4 Mac build or tag until verified. Preserve v0.3.0 and do not overwrite its downloaded ZIP.
+
+Next: run CI for the exact source; fix native failures, inspect all native settings snapshots, inspect both downloaded ZIPs, tag only the passing source and record final evidence. Real Mac recording/permissions/editor/shortcut/energy, actual Mac-to-G14 SSH and real provider/diarization inference remain unverified. No need to repeat already passing checks without a relevant change.
+
+## V0.3 archived verified state
 
 V0.3.0 is complete, tested, pushed and tagged at source `48e1ae4a0b0f638d226448453246202e21ce00d2`. Default dictation is Control + Option + Space, hold to speak; Settings can change chord/gesture/backend. `open -g 'murmure://dictation/toggle'` is the command interface, with start/stop/cancel variants. The native capsule matches the supplied image. Summary commands run serially and can be cancelled; automatic handoff starts off. See docs/V0.3_SCOPE.md, docs/VALIDATION_V3.md and docs/MAC_TESTING.md. No additional COS review was requested.
 

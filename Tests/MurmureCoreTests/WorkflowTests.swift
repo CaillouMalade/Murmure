@@ -2,6 +2,25 @@ import XCTest
 @testable import MurmureCore
 
 final class WorkflowTests: XCTestCase {
+    func testV3DictationUpgradePreservesLegacyShortcutAndAddsNewDefaults() throws {
+        let data = Data(#"{"dictation":{"enabled":false,"backend":"onDevice","gesture":"toggle","copyToClipboard":true,"shortcut":{"keyCode":49,"control":true,"option":true,"command":false,"shift":false,"keyLabel":"Space"}}}"#.utf8)
+        var settings = try JSONDecoder().decode(AppSettings.self, from: data)
+        XCTAssertFalse(settings.dictation.enabled); XCTAssertEqual(settings.dictation.backend, .onDevice)
+        XCTAssertEqual(settings.dictation.gesture, .toggle); XCTAssertTrue(settings.dictation.copyToClipboard)
+        XCTAssertTrue(settings.dictation.shortcut.option); XCTAssertFalse(settings.dictation.shortcut.shift)
+        XCTAssertTrue(settings.dictation.insertAtCursor); XCTAssertEqual(settings.dictation.timeoutSeconds, 180)
+        settings.dictation.insertAtCursor = false; settings.dictation.timeoutSeconds = 600
+        let roundTrip = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        XCTAssertFalse(roundTrip.dictation.insertAtCursor); XCTAssertEqual(roundTrip.dictation.timeoutSeconds, 600)
+    }
+    func testCaptureWarningSurvivesRepositoryAndMarkdownExport() throws {
+        let root = try temporaryDirectory(), repository = try JobRepository(root: root)
+        var job = RecordingJob(source: .both, options: TranscriptionOptions()); job.captureWarning = "Microphone only; Mac audio failed."
+        try repository.save(job)
+        let recovered = try XCTUnwrap(repository.load().first)
+        let note = MarkdownWorkflow.transcript(Transcript(language: "en", segments: []), job: recovered)
+        XCTAssertTrue(note.contains("> Capture warning: Microphone only; Mac audio failed."))
+    }
     private func temporaryDirectory() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("Murmure workflow " + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

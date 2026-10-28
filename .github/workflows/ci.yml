@@ -63,6 +63,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Murmure-macOS-${{ github.sha }}
-          path: dist/Murmure-*-macOS.zip
+          path: |
+            dist/Murmure-*-macOS.zip
+            dist/Murmure-*-worker.zip
+            START_HERE.txt
           if-no-files-found: error
           retention-days: 30

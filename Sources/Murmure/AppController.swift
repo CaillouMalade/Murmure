@@ -23,6 +23,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var transcriptWindow: TranscriptWindow?
     private var activeMenu: NSMenu?
     private var deferredTranscriptID: String?
+    private var deferredTranscriptShouldActivate = true
     private var lastCheckMessage = "Results are checked on demand; there is no background polling."
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -48,16 +49,17 @@ final class AppController: NSObject, NSApplicationDelegate {
         dictation.levelChanged = { [weak self] level in self?.indicator.setLevel(level) }
         dictation.saved = { [weak self] job in try self?.persist(job) }
         dictation.failed = { [weak self] error in self?.showError(error) }
-        dictation.resultNeedsCopy = { [weak self] _ in
-            self?.lastCheckMessage = "Dictation is ready to copy. Open the newest dictation from this menu."
-            self?.updateIndicator()
+        dictation.resultNeedsCopy = { [weak self] id in
+            self?.lastCheckMessage = "Dictation is ready to copy. Check its recovery window."
+            self?.offerTranscript(id: id, activate: false)
         }
         shortcut.changed = { [weak self] pressed in self?.shortcutChanged(pressed) }
+        var shortcutNeedsSetup = false
         do { try shortcut.register(settings.dictation.shortcut, enabled: settings.dictation.enabled) }
-        catch { lastCheckMessage = error.localizedDescription }
+        catch { lastCheckMessage = error.localizedDescription; shortcutNeedsSetup = true }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
         updateIndicator()
-        if settings.remote.host.isEmpty && jobs.isEmpty { showSettings(nil) }
+        if (settings.remote.host.isEmpty && jobs.isEmpty) || shortcutNeedsSetup { showSettings(nil) }
         Task { await refreshPending() }
     }
 
@@ -172,11 +174,22 @@ final class AppController: NSObject, NSApplicationDelegate {
         let check = menuItem(checking ? "Checking results…" : "Check results", action: #selector(checkResults))
         check.tag = 1001; check.isEnabled = !checking; menu.addItem(check)
         let feedback = menuItem(lastCheckMessage, action: nil); feedback.tag = 1002; feedback.isEnabled = false; menu.addItem(feedback)
-        for job in jobs.prefix(12) {
+        let recordings = jobs.filter { $0.effectiveKind == .recording }
+        for job in recordings.prefix(12) {
             let row = menuItem(jobTitle(job), action: nil, represented: job.id)
+            row.tag = 2001
             row.submenu = jobActions(job); menu.addItem(row)
         }
-        if jobs.count > 12 { menu.addItem(menuItem("Show all recording files…", action: #selector(showAllRecordings))) }
+        if recordings.count > 12 {
+            let older = menuItem("Older recordings (\(recordings.count - 12))", action: nil)
+            older.submenu = historyMenu(Array(recordings.dropFirst(12))); menu.addItem(older)
+        }
+        let dictations = jobs.filter { $0.effectiveKind == .dictation }
+        if !dictations.isEmpty {
+            let history = menuItem("Dictation history (\(dictations.count))", action: nil)
+            history.submenu = historyMenu(dictations); menu.addItem(history)
+        }
+        if !jobs.isEmpty { menu.addItem(menuItem("Show all recording files…", action: #selector(showAllRecordings))) }
         menu.addItem(.separator())
         let preferences = menuItem("Settings…", action: #selector(showSettings)); preferences.isEnabled = !dictation.isActive; menu.addItem(preferences)
         menu.addItem(menuItem("Quit Murmure", action: #selector(quit)))
@@ -184,7 +197,16 @@ final class AppController: NSObject, NSApplicationDelegate {
         Task { await refreshPending() }
         if let button = statusItem.button { menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY), in: button) }
         activeMenu = nil
-        if let id = deferredTranscriptID { deferredTranscriptID = nil; presentTranscript(id: id) }
+        if let id = deferredTranscriptID { deferredTranscriptID = nil; presentTranscript(id: id, activate: deferredTranscriptShouldActivate) }
+    }
+
+    private func historyMenu(_ history: [RecordingJob]) -> NSMenu {
+        let menu = NSMenu(); menu.autoenablesItems = false
+        for job in history {
+            let row = menuItem(jobTitle(job), action: nil, represented: job.id); row.tag = 2001
+            row.submenu = jobActions(job); menu.addItem(row)
+        }
+        return menu
     }
 
     private func jobTitle(_ job: RecordingJob) -> String {
@@ -212,8 +234,16 @@ final class AppController: NSObject, NSApplicationDelegate {
             let detail = menuItem(String(message.prefix(120)), action: nil); detail.isEnabled = false; actions.addItem(detail)
             actions.addItem(menuItem("Show details…", action: #selector(showJobDetails), represented: job.id))
         }
-        if [.queued, .failed].contains(job.state) { actions.addItem(menuItem("Send / retry over SSH", action: #selector(retryRemote), represented: job.id)) }
-        if [.queued, .failed, .remote].contains(job.state) { actions.addItem(menuItem("Process on this Mac…", action: #selector(runLocal), represented: job.id)) }
+        if job.captureWarning != nil { actions.addItem(menuItem("Capture warning…", action: #selector(showCaptureWarning), represented: job.id)) }
+        if [.queued, .failed, .interrupted].contains(job.state) { actions.addItem(menuItem("Send / retry over SSH", action: #selector(retryRemote), represented: job.id)) }
+        if [.queued, .failed, .interrupted, .remote].contains(job.state) { actions.addItem(menuItem("Process on this Mac…", action: #selector(runLocal), represented: job.id)) }
+        if [.failed, .interrupted].contains(job.state), let directory = try? repository.directory(for: job.id),
+           !FileManager.default.fileExists(atPath: directory.appendingPathComponent("audio.m4a").path) {
+            for filename in ["microphone.m4a", "system.m4a"] where FileManager.default.fileExists(atPath: directory.appendingPathComponent(filename).path) {
+                let recovery = menuItem(filename == "microphone.m4a" ? "Recover microphone audio…" : "Recover Mac audio…", action: #selector(recoverCapture), represented: [job.id, filename])
+                actions.addItem(recovery)
+            }
+        }
         actions.addItem(menuItem("Show recording folder", action: #selector(showRecordingFolder), represented: job.id))
         return actions
     }
@@ -222,11 +252,14 @@ final class AppController: NSObject, NSApplicationDelegate {
         menu.item(withTag: 1001)?.title = checking ? "Checking results…" : "Check results"
         menu.item(withTag: 1001)?.isEnabled = !checking
         menu.item(withTag: 1002)?.title = lastCheckMessage
-        for item in menu.items {
-            if let id = item.representedObject as? String, let job = jobs.first(where: { $0.id == id }) {
-                item.title = jobTitle(job); item.submenu = jobActions(job)
+        func refresh(_ menu: NSMenu) {
+            for item in menu.items {
+                if item.tag == 2001, let id = item.representedObject as? String, let job = jobs.first(where: { $0.id == id }) {
+                    item.title = jobTitle(job); item.submenu = jobActions(job)
+                } else if let submenu = item.submenu { refresh(submenu) }
             }
         }
+        refresh(menu)
     }
 
     @objc private func toggleRecording(_ sender: Any?) {
@@ -258,7 +291,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         guard let id = recordingID, var job = jobs.first(where: { $0.id == id }) else { return }
         transitioning = true; job.state = .preparing; job.duration = max(0, Date().timeIntervalSince(job.createdAt)); try? persist(job); updateIndicator()
         do {
-            _ = try await recorder.stop()
+            let capture = try await recorder.stop(); job.captureWarning = capture.warning
             job.state = .queued; job.message = interruption.map { "Capture was interrupted: \($0.localizedDescription). Saved audio is available." }
             try persist(job)
         } catch {
@@ -292,6 +325,28 @@ final class AppController: NSObject, NSApplicationDelegate {
         alert.informativeText = "This uses this Mac’s processor and battery. Any remote job already submitted may still finish. The local worker must be configured in Settings."
         alert.addButton(withTitle: "Process locally"); alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn { Task { await submit(id: id, locally: true) } }
+    }
+
+    @objc private func recoverCapture(_ item: NSMenuItem) {
+        guard let values = item.representedObject as? [String], values.count == 2,
+              let job = jobs.first(where: { $0.id == values[0] }) else { return }
+        let alert = NSAlert(); alert.messageText = "Recover this audio track?"
+        alert.informativeText = "Only the selected track will be used. Recovery preserves the original files and does not send audio or insert text. An unfinished capture may not be readable."
+        alert.addButton(withTitle: "Recover"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task {
+            do {
+                let directory = try repository.directory(for: job.id)
+                let result = try await AudioFinalizer.single(directory.appendingPathComponent(values[1]), directory: directory,
+                    warning: "Recovered only \(values[1] == "microphone.m4a" ? "microphone" : "Mac") audio from an incomplete recording. Original files are kept.")
+                var recovered = job; recovered.captureWarning = result.warning; recovered.state = .queued
+                recovered.message = "Audio recovered. Choose Send / retry over SSH or Process on this Mac to transcribe it."
+                try persist(recovered); showInformation(recovered.message!)
+            } catch { showError(error) }
+        }
+    }
+    @objc private func showCaptureWarning(_ item: NSMenuItem) {
+        if let id = item.representedObject as? String, let warning = jobs.first(where: { $0.id == id })?.captureWarning { showInformation(warning) }
     }
 
     private func submit(id: String, locally: Bool) async {
@@ -491,12 +546,12 @@ final class AppController: NSObject, NSApplicationDelegate {
     @objc private func openTranscript(_ item: NSMenuItem) {
         if let id = item.representedObject as? String { presentTranscript(id: id) }
     }
-    private func offerTranscript(id: String) {
+    private func offerTranscript(id: String, activate: Bool = true) {
         guard recordingID == nil, !transitioning, !dictation.isActive else { return }
-        if activeMenu != nil { deferredTranscriptID = id }
-        else { presentTranscript(id: id) }
+        if activeMenu != nil { deferredTranscriptID = id; deferredTranscriptShouldActivate = activate }
+        else { presentTranscript(id: id, activate: activate) }
     }
-    private func presentTranscript(id: String) {
+    private func presentTranscript(id: String, activate: Bool = true) {
         guard var job = jobs.first(where: { $0.id == id }), let path = job.transcriptPath else { return }
         do {
             var text = try String(contentsOfFile: path, encoding: .utf8)
@@ -506,9 +561,15 @@ final class AppController: NSObject, NSApplicationDelegate {
                 text = transcript.segments.map(\.text).joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
             }
             transcriptWindow?.close()
-            transcriptWindow = TranscriptWindow(text: text, file: URL(fileURLWithPath: path))
-            transcriptWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
-            job.transcriptViewedAt = Date(); try persist(job)
+            transcriptWindow = TranscriptWindow(text: text, file: URL(fileURLWithPath: path), notice: [job.captureWarning, job.message].compactMap { $0 }.joined(separator: "\n"))
+            if activate {
+                transcriptWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
+                job.transcriptViewedAt = Date(); try persist(job)
+            } else {
+                // A recovery result is visible without stealing focus while an
+                // editor may still be handling posted Unicode events.
+                transcriptWindow?.window?.orderFrontRegardless()
+            }
         } catch { showError(error) }
     }
     @objc private func showJobDetails(_ item: NSMenuItem) {
