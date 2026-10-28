@@ -561,7 +561,10 @@ final class AppController: NSObject, NSApplicationDelegate {
                 text = transcript.segments.map(\.text).joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
             }
             transcriptWindow?.close()
-            transcriptWindow = TranscriptWindow(text: text, file: URL(fileURLWithPath: path), notice: [job.captureWarning, job.message].compactMap { $0 }.joined(separator: "\n"))
+            transcriptWindow = TranscriptWindow(text: text, file: URL(fileURLWithPath: path), notice: [job.captureWarning, job.message].compactMap { $0 }.joined(separator: "\n"), onCopy: { [weak self] in
+                guard let self, var current = self.jobs.first(where: { $0.id == id }) else { return }
+                current.transcriptViewedAt = Date(); try? self.persist(current)
+            })
             if activate {
                 transcriptWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
                 job.transcriptViewedAt = Date(); try persist(job)

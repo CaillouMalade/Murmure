@@ -36,7 +36,28 @@ final class SettingsTests: XCTestCase {
                     let root = URL(fileURLWithPath: directory)
                     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
                     try data.write(to: root.appendingPathComponent("settings-" + name + ".png"))
+                    if name == "setup", let document = scroll.documentView {
+                        document.scroll(NSPoint(x: 0, y: max(0, document.bounds.height - scroll.contentView.bounds.height)))
+                        content.layoutSubtreeIfNeeded()
+                        let bottom = try XCTUnwrap(content.bitmapImageRepForCachingDisplay(in: content.bounds))
+                        content.cacheDisplay(in: content.bounds, to: bottom)
+                        try XCTUnwrap(bottom.representation(using: .png, properties: [:])).write(to: root.appendingPathComponent("settings-setup-model.png"))
+                    }
                 }
+            }
+        }
+    }
+    func testRecoveryWindowRendersNoticeWithoutBecomingVisible() async throws {
+        try await MainActor.run {
+            _ = NSApplication.shared
+            let controller = TranscriptWindow(text: "Bonjour, café et décisions.", file: URL(fileURLWithPath: "/tmp/transcript.md"), notice: "The editor did not confirm text insertion. Check the field before using Copy to avoid inserting it twice.")
+            let window = try XCTUnwrap(controller.window), content = try XCTUnwrap(window.contentView)
+            defer { window.close() }
+            content.layoutSubtreeIfNeeded(); XCTAssertFalse(window.isVisible)
+            if let directory = ProcessInfo.processInfo.environment["MURMURE_SNAPSHOT_DIR"] {
+                let bitmap = try XCTUnwrap(content.bitmapImageRepForCachingDisplay(in: content.bounds))
+                content.cacheDisplay(in: content.bounds, to: bitmap)
+                try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: URL(fileURLWithPath: directory).appendingPathComponent("dictation-recovery.png"))
             }
         }
     }

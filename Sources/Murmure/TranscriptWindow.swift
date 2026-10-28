@@ -4,8 +4,9 @@ import AppKit
 final class TranscriptWindow: NSWindowController {
     private let text: String
     private let file: URL
-    init(text: String, file: URL, notice: String? = nil) {
-        self.text = text; self.file = file
+    private let onCopy: (() -> Void)?
+    init(text: String, file: URL, notice: String? = nil, onCopy: (() -> Void)? = nil) {
+        self.text = text; self.file = file; self.onCopy = onCopy
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 480), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "Murmure Transcript"; window.isReleasedWhenClosed = false; window.minSize = NSSize(width: 400, height: 280)
         super.init(window: window)
@@ -31,6 +32,6 @@ final class TranscriptWindow: NSWindowController {
         window.center()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
-    @objc private func copyText() { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
+    @objc private func copyText() { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string); onCopy?() }
     @objc private func revealFile() { NSWorkspace.shared.activateFileViewerSelecting([file]) }
 }
