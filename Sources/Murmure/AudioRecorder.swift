@@ -94,6 +94,7 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
                     AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64_000
                 ])
                 microphone.delegate = self
+                microphone.isMeteringEnabled = true
                 guard microphone.prepareToRecord() else { throw MurmureError.message("The microphone could not be prepared.") }
                 microphoneStart = CMClockGetTime(CMClockGetHostTimeClock()).seconds
                 guard microphone.record() else { throw MurmureError.message("The microphone could not start recording.") }
@@ -106,6 +107,13 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
             if let sink { _ = try? await sink.finish() }; sink = nil
             throw error
         }
+    }
+
+    var microphoneLevel: Float {
+        guard let microphone else { return 0 }
+        microphone.updateMeters()
+        // Quiet speech still has a visible floor; no synthetic random waveform.
+        return max(0, min(1, (microphone.averagePower(forChannel: 0) + 55) / 55))
     }
 
     func stop() async throws -> URL {

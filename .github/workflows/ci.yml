@@ -43,8 +43,16 @@ jobs:
         run: |
           python3 -m pip install -r worker/requirements.txt
           python3 scripts/check-worker-runtime.py
-      - name: Native core tests
+      - name: Native tests and indicator rendering
         run: swift test
+        env:
+          MURMURE_SNAPSHOT_DIR: ${{ github.workspace }}/.build/indicator-snapshots
+      - name: Upload native indicator snapshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: indicator-${{ github.sha }}
+          path: .build/indicator-snapshots/*.png
+          if-no-files-found: error
       - name: Build universal Mac app
         run: bash scripts/build-app.sh
       - name: Inspect packaged executable

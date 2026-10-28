@@ -7,7 +7,9 @@ let package = Package(
     products: [.executable(name: "Murmure", targets: ["Murmure"])],
     targets: [
         .target(name: "MurmureCore"),
-        .executableTarget(name: "Murmure", dependencies: ["MurmureCore"]),
-        .testTarget(name: "MurmureCoreTests", dependencies: ["MurmureCore"])
+        .target(name: "MurmureUI"),
+        .executableTarget(name: "Murmure", dependencies: ["MurmureCore", "MurmureUI"]),
+        .testTarget(name: "MurmureCoreTests", dependencies: ["MurmureCore"]),
+        .testTarget(name: "MurmureUITests", dependencies: ["MurmureUI"])
     ]
 )

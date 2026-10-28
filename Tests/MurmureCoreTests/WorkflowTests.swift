@@ -35,7 +35,7 @@ final class WorkflowTests: XCTestCase {
     }
     func testClaudeFailuresCannotBecomeSuccessfulMarkdown() throws {
         XCTAssertThrowsError(try AgentInvocation.output(Data(#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":"Sign in first"}"#.utf8), provider: .claude))
-        let summary = try AgentInvocation.output(Data(#"{"type":"result","subtype":"success","is_error":false,"result":"# Summary\n\nHello"}"#.utf8), provider: .claude)
+        let summary = try AgentInvocation.output(Data(##"{"type":"result","subtype":"success","is_error":false,"result":"# Summary\n\nHello"}"##.utf8), provider: .claude)
         XCTAssertEqual(summary, "# Summary\n\nHello\n")
         XCTAssertThrowsError(try AgentInvocation.output(Data(), provider: .codex))
         let claude = AgentInvocation.arguments(provider: .claude)

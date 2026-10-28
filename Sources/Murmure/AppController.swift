@@ -1,5 +1,6 @@
 import AppKit
 import MurmureCore
+import MurmureUI
 
 @MainActor
 final class AppController: NSObject, NSApplicationDelegate {
@@ -8,6 +9,10 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var settings = AppSettings()
     private var jobs: [RecordingJob] = []
     private let recorder = AudioRecorder()
+    private var dictation: DictationController!
+    private let indicator = DictationIndicator(frame: NSRect(x: 0, y: 0, width: 70, height: 24))
+    private let shortcut = GlobalShortcut()
+    private var shortcutDown = false
     private var recordingID: String?
     private var transitioning = false
     private var checking = false
@@ -37,6 +42,18 @@ final class AppController: NSObject, NSApplicationDelegate {
             guard let self, self.recordingID != nil, !self.transitioning else { return }
             Task { await self.stopRecording(interruption: error) }
         }
+        dictation = DictationController(repository: repository)
+        dictation.phaseChanged = { [weak self] phase in self?.indicator.setPhase(phase); self?.updateIndicator() }
+        dictation.levelChanged = { [weak self] level in self?.indicator.setLevel(level) }
+        dictation.saved = { [weak self] job in try self?.persist(job) }
+        dictation.failed = { [weak self] error in self?.showError(error) }
+        dictation.resultNeedsCopy = { [weak self] _ in
+            self?.lastCheckMessage = "Dictation is ready to copy. Open the newest dictation from this menu."
+            self?.updateIndicator()
+        }
+        shortcut.changed = { [weak self] pressed in self?.shortcutChanged(pressed) }
+        do { try shortcut.register(settings.dictation.shortcut, enabled: settings.dictation.enabled) }
+        catch { lastCheckMessage = error.localizedDescription }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
         updateIndicator()
         if settings.remote.host.isEmpty && jobs.isEmpty { showSettings(nil) }
@@ -44,6 +61,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if dictation?.isActive == true {
+            showError(MurmureError.message("Finish or cancel dictation from the menu before quitting.")); return .terminateCancel
+        }
         if recordingID != nil || transitioning {
             showError(MurmureError.message("Stop the recording before quitting so its audio can be finalized."))
             return .terminateCancel
@@ -62,12 +82,52 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     @objc private func statusClicked() {
         if NSApp.currentEvent?.type == .rightMouseUp { openMenu(); return }
+        if dictation?.isActive == true { dictation.stop(); return }
         toggleRecording(nil)
     }
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            guard let command = DictationCommand(url: url) else { continue }
+            switch command {
+            case .start: startDictation()
+            case .stop: dictation?.stop()
+            case .cancel: dictation?.cancel()
+            case .toggle: toggleDictation()
+            }
+        }
+    }
+    private func shortcutChanged(_ pressed: Bool) {
+        if pressed {
+            guard !shortcutDown else { return }; shortcutDown = true
+            if settings.dictation.gesture == .toggle { toggleDictation() } else { startDictation() }
+        } else {
+            guard shortcutDown else { return }; shortcutDown = false
+            if settings.dictation.gesture == .hold { dictation.stop() }
+        }
+    }
+    private func startDictation() {
+        guard recordingID == nil, !transitioning, dictation != nil else { return }
+        dictation.start(settings: settings)
+    }
+    @objc private func toggleDictation() {
+        if dictation?.isActive == true { dictation.stop() } else { startDictation() }
+    }
+    @objc private func cancelDictation() { dictation.cancel() }
     @objc private func didWake() { Task { await refreshPending() } }
 
     private func updateIndicator() {
         guard let button = statusItem?.button else { return }
+        if dictation?.isActive == true {
+            statusItem.length = 72; button.image = nil
+            if indicator.superview == nil { button.addSubview(indicator) }
+            indicator.frame = NSRect(x: 1, y: (button.bounds.height - 24) / 2, width: 70, height: 24)
+            indicator.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            button.toolTip = dictation.phase == .listening ? "Dictating. Release the shortcut or click to finish. Right-click to cancel." : "Processing dictation. Right-click to cancel."
+            button.setAccessibilityLabel(dictation.phase == .listening ? "Murmure is listening" : "Murmure is processing dictation")
+            return
+        }
+        indicator.setPhase(.idle); indicator.removeFromSuperview(); statusItem.length = NSStatusItem.squareLength
+        button.setAccessibilityLabel("Murmure recording and transcription")
         let recording = recordingID != nil && !transitioning
         let readyCount = jobs.filter { $0.hasUnreadTranscript || $0.hasUnreadSummary }.count
         let symbol = recording ? "record.circle.fill" : (transitioning ? "ellipsis.circle" : (readyCount > 0 ? "text.bubble.fill" : "waveform.circle"))
@@ -89,7 +149,11 @@ final class AppController: NSObject, NSApplicationDelegate {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development"
         let heading = menuItem("Murmure \(version)", action: nil); heading.isEnabled = false; menu.addItem(heading)
         let record = menuItem(recordingID == nil ? "Start recording" : "Stop recording", action: #selector(toggleRecording))
-        record.isEnabled = !transitioning; menu.addItem(record)
+        record.isEnabled = !transitioning && !dictation.isActive; menu.addItem(record)
+        let dictate = menuItem(dictation.isActive ? "Finish dictation" : "Start dictation (\(settings.dictation.shortcut.display))", action: #selector(toggleDictation))
+        dictate.isEnabled = settings.dictation.enabled && recordingID == nil && !transitioning && dictation.phase != .processing
+        menu.addItem(dictate)
+        if dictation.isActive { menu.addItem(menuItem("Cancel dictation", action: #selector(cancelDictation))) }
         let source = menuItem("Audio source: \(settings.source.title)", action: nil)
         let sources = NSMenu()
         for value in AudioSource.allCases {
@@ -112,7 +176,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         if jobs.count > 12 { menu.addItem(menuItem("Show all recording files…", action: #selector(showAllRecordings))) }
         menu.addItem(.separator())
-        menu.addItem(menuItem("Settings…", action: #selector(showSettings)))
+        let preferences = menuItem("Settings…", action: #selector(showSettings)); preferences.isEnabled = !dictation.isActive; menu.addItem(preferences)
         menu.addItem(menuItem("Quit Murmure", action: #selector(quit)))
         activeMenu = menu
         Task { await refreshPending() }
@@ -125,7 +189,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         let time = DateFormatter.localizedString(from: job.createdAt, dateStyle: .short, timeStyle: .short)
         let duration = job.duration.map { " · \(Transcript.timestamp($0))" } ?? ""
         let status = job.summary?.state == .running ? "Summarizing…" : (job.hasUnreadSummary ? "Summary ready" : job.state.title)
-        return "\(job.hasUnreadTranscript || job.hasUnreadSummary ? "New · " : "")\(time) · \(job.source.title)\(duration) · \(status)"
+        return "\(job.hasUnreadTranscript || job.hasUnreadSummary ? "New · " : "")\(time) · \(job.effectiveKind == .dictation ? "Dictation" : job.source.title)\(duration) · \(status)"
     }
     private func jobActions(_ job: RecordingJob) -> NSMenu {
         let actions = NSMenu()
@@ -163,7 +227,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleRecording(_ sender: Any?) {
-        guard !transitioning else { return }
+        guard !transitioning, dictation?.isActive != true else { return }
         Task { if recordingID == nil { await startRecording() } else { await stopRecording() } }
     }
     private func startRecording() async {
@@ -279,7 +343,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if !unavailable.isEmpty || localUnavailable { lastCheckMessage = "A worker is unreachable. Saved audio is safe; see job details." }
         else if pendingCount > 0 { lastCheckMessage = "\(pendingCount) job(s) still processing. Check again when convenient." }
         else { lastCheckMessage = "No jobs waiting for results." }
-        if userInitiated, recordingID == nil, !transitioning {
+        if userInitiated, recordingID == nil, !transitioning, !dictation.isActive {
             if let id = newlyCompleted.first ?? jobs.first(where: \.hasUnreadTranscript)?.id { offerTranscript(id: id) }
             else { showInformation(lastCheckMessage) }
         }
@@ -350,7 +414,7 @@ final class AppController: NSObject, NSApplicationDelegate {
                     catch { result.error = "Summary saved inside Murmure; export failed: \(error.localizedDescription)" }
                 }
                 current.summary = result; try persist(current)
-                if userInitiated { presentSummary(id: id) }
+                if userInitiated, !dictation.isActive { presentSummary(id: id) }
             } catch {
                 if var current = jobs.first(where: { $0.id == id }) {
                     current.summary = SummaryRecord(state: error is CancellationError ? .interrupted : .failed, provider: configuration.provider)
@@ -380,8 +444,15 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     @objc private func showSettings(_ sender: Any?) {
         settingsWindow?.close()
-        settingsWindow = SettingsWindow(settings: settings, localRoot: repository.separateLocalWorkerRoot) { [weak self] updated in
-            self?.settings = updated; self?.saveSettings()
+        settingsWindow = SettingsWindow(settings: settings, localRoot: repository.separateLocalWorkerRoot, onShortcutCapture: { [weak self] capturing in
+            guard let self else { return }
+            if capturing { self.shortcut.unregister(); self.shortcutDown = false }
+            else { try? self.shortcut.register(self.settings.dictation.shortcut, enabled: self.settings.dictation.enabled) }
+        }) { [weak self] updated in
+            guard let self else { return }
+            do { try shortcut.register(updated.dictation.shortcut, enabled: updated.dictation.enabled) }
+            catch { try? shortcut.register(settings.dictation.shortcut, enabled: settings.dictation.enabled); throw error }
+            settings = updated; saveSettings()
         }
         settingsWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
     }
@@ -389,14 +460,19 @@ final class AppController: NSObject, NSApplicationDelegate {
         if let id = item.representedObject as? String { presentTranscript(id: id) }
     }
     private func offerTranscript(id: String) {
-        guard recordingID == nil, !transitioning else { return }
+        guard recordingID == nil, !transitioning, !dictation.isActive else { return }
         if activeMenu != nil { deferredTranscriptID = id }
         else { presentTranscript(id: id) }
     }
     private func presentTranscript(id: String) {
         guard var job = jobs.first(where: { $0.id == id }), let path = job.transcriptPath else { return }
         do {
-            let text = try String(contentsOfFile: path, encoding: .utf8)
+            var text = try String(contentsOfFile: path, encoding: .utf8)
+            if job.effectiveKind == .dictation,
+               let data = try? Data(contentsOf: repository.directory(for: id).appendingPathComponent("transcript.json")),
+               let transcript = try? JSONDecoder().decode(Transcript.self, from: data) {
+                text = transcript.segments.map(\.text).joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            }
             transcriptWindow?.close()
             transcriptWindow = TranscriptWindow(text: text, file: URL(fileURLWithPath: path))
             transcriptWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
@@ -412,11 +488,13 @@ final class AppController: NSObject, NSApplicationDelegate {
     @objc private func showAllRecordings() { NSWorkspace.shared.open(repository.root) }
     @objc private func quit() { NSApp.terminate(nil) }
     private func showInformation(_ message: String) {
+        if dictation?.isActive == true { lastCheckMessage = message; return }
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert(); alert.messageText = "Murmure"; alert.informativeText = message
         alert.addButton(withTitle: "OK"); alert.runModal()
     }
     private func showError(_ error: Error) {
+        if dictation?.isActive == true { lastCheckMessage = error.localizedDescription; return }
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert(); alert.messageText = "Murmure needs attention"; alert.informativeText = error.localizedDescription
         alert.addButton(withTitle: "OK"); alert.runModal()

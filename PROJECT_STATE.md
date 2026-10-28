@@ -30,6 +30,8 @@ A live localhost SSH attempt was refused by StrictHostKeyChecking because no tru
 
 ## Current next steps
 
+V0.3.0 is in progress at Arthur's request: SSH-first quick dictation with a configurable global shortcut/URL command, a black six-bar menu indicator matching the supplied reference, insertion after transcription (no live words), optional clipboard copy, selectable on-device recognition, Markdown folder selection, and optional Codex/Claude Code summaries using an editable template. The first workflow commit is d58d4f8. Its initial CI caught a Swift test string delimiter error; fixed during continued implementation. No v0.3.0 tag or finished build exists yet. See docs/V0.3_SCOPE.md. Do not redo the completed v1/COS/v2 work below.
+
 The requested v1 → COS review → v2 implementation and GitHub versioning are complete, with automated validation and both immutable milestone tags. Do not redo v1 or ask COS again. Provide the final build/source/review links and attach the final Mac ZIP.
 
 Remaining user-side validation is in docs/MAC_TESTING.md: macOS 15+ UI/recording/permissions/mix, model diarization, real SSH setup and idle energy/memory. These are limitations of the current development build, not claimed successes. Future product changes should follow Arthur's next request; no extra features, publication, signing/notarization, host configuration or routines have been authorized.

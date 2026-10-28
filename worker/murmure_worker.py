@@ -19,7 +19,7 @@ import time
 from typing import BinaryIO
 import uuid
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 MAX_HEADER = 16_384
 MAX_AUDIO_BYTES = 16 * 1024**3
 CHUNK = 64 * 1024
@@ -181,7 +181,7 @@ def start_detached(root: Path, identifier: str) -> None:
         spawn_detached(arguments, log)
 
 
-def submit(root: Path, header: dict, source: BinaryIO) -> dict:
+def submit(root: Path, header: dict, source: BinaryIO, *, deferred: bool = True) -> dict:
     identifier = header.get("id")
     directory = job_path(root, identifier)
     size = header.get("bytes")
@@ -204,7 +204,8 @@ def submit(root: Path, header: dict, source: BinaryIO) -> dict:
             os.replace(temporary, directory / "audio.m4a")
             atomic_json(directory / "request.json", options)
             write_status(directory, "queued")
-            start_detached(root, identifier)
+            if deferred:
+                start_detached(root, identifier)
         except Exception as error:
             write_status(directory, "failed", error=failure_message(error))
             raise
@@ -275,7 +276,7 @@ def transcribe(path: Path, options: dict) -> dict:
     return {"language": info.language, "segments": segments}
 
 
-def run_job(root: Path, identifier: str) -> None:
+def run_job(root: Path, identifier: str, *, wait_for_engine: bool = True) -> None:
     directory = job_path(root, identifier)
     try:
         with file_lock(directory / "run.lock", blocking=False):
@@ -283,12 +284,15 @@ def run_job(root: Path, identifier: str) -> None:
                 return
             try:
                 # Hold run.lock even while queued, so long waits are not called stalled.
-                with file_lock(root / "engine.lock"):
+                with file_lock(root / "engine.lock", blocking=wait_for_engine):
                     write_status(directory, "running")
-                    result = transcribe(directory / "audio.m4a", read_json(directory / "request.json"))
+                    with contextlib.redirect_stdout(sys.stderr):
+                        result = transcribe(directory / "audio.m4a", read_json(directory / "request.json"))
                     atomic_json(directory / "transcript.json", result)
                     write_status(directory, "completed")
             except Exception as error:
+                if isinstance(error, LockBusy) and not wait_for_engine:
+                    error = WorkerError("The remote model is busy with another recording. Dictation was saved; try again when it finishes, or select on-device dictation in Settings.")
                 message = failure_message(error)
                 write_status(directory, "failed", error=message)
                 print(message, file=sys.stderr)
@@ -324,6 +328,13 @@ def rpc(source: BinaryIO) -> dict:
         return {**status(root, header.get("id")), "protocolVersion": 1}
     if operation == "submit":
         return {**submit(root, header, source), "protocolVersion": 1}
+    if operation == "transcribe":
+        # Foreground SSH lifetime: one upload, one inference, one response.
+        # Never leave a detached dictation or poll an engine queue from the Mac.
+        result = submit(root, header, source, deferred=False)
+        if result["state"] != "completed":
+            run_job(root, header.get("id"), wait_for_engine=False)
+        return {**status(root, header.get("id")), "protocolVersion": 1}
     raise WorkerError("Unknown worker operation.")
 
 

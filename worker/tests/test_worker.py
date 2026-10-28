@@ -64,6 +64,38 @@ class WorkerTests(unittest.TestCase):
             worker.run_job(self.root, self.identifier)
         self.assertEqual(worker.status(self.root, self.identifier)["transcript"], transcript)
 
+    def test_foreground_dictation_returns_result_without_detached_process(self):
+        header = {**self.header(), "op": "transcribe"}
+        source = io.BytesIO(json.dumps(header).encode() + b"\n" + b"audio")
+        transcript = {"language": "en", "segments": [{"start": 0, "end": 1, "text": " Dictation", "speaker": None}]}
+        with patch.object(worker, "start_detached") as start, patch.object(worker, "transcribe", return_value=transcript):
+            result = worker.rpc(source)
+        start.assert_not_called()
+        self.assertEqual(result["state"], "completed")
+        self.assertEqual(result["transcript"], transcript)
+        self.assertEqual(result["protocolVersion"], 1)
+        self.assertEqual((self.root / self.identifier / "audio.m4a").read_bytes(), b"audio")
+
+    def test_foreground_dictation_fails_fast_when_engine_is_busy(self):
+        with patch.object(worker, "start_detached") as start:
+            worker.submit(self.root, self.header(), io.BytesIO(b"audio"), deferred=False)
+        start.assert_not_called()
+        with worker.file_lock(self.root / "engine.lock"), patch.object(worker, "transcribe") as transcribe:
+            worker.run_job(self.root, self.identifier, wait_for_engine=False)
+        transcribe.assert_not_called()
+        result = worker.status(self.root, self.identifier)
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("busy", result["error"])
+        self.assertTrue((self.root / self.identifier / "audio.m4a").exists())
+
+    def test_foreground_retry_returns_saved_result_without_new_inference(self):
+        transcript = {"language": "en", "segments": []}
+        with patch.object(worker, "start_detached"), patch.object(worker, "transcribe", return_value=transcript) as transcribe:
+            for _ in range(2):
+                source = io.BytesIO(json.dumps({**self.header(), "op": "transcribe"}).encode() + b"\n" + b"audio")
+                self.assertEqual(worker.rpc(source)["state"], "completed")
+        transcribe.assert_called_once()
+
     def test_failure_is_reported_without_exception_secrets(self):
         with patch.object(worker, "start_detached"):
             worker.submit(self.root, self.header(), io.BytesIO(b"audio"))
