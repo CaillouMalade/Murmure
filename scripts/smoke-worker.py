@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--expected", nargs="+", default=["recording", "computer"])
     parser.add_argument("--model", default="tiny.en")
+    parser.add_argument("--foreground", action="store_true", help="Exercise v0.3 quick dictation through a real RPC subprocess.")
     arguments = parser.parse_args()
     root = arguments.root.resolve(); root.mkdir(parents=True, exist_ok=True)
     identifier = str(uuid.uuid4())
@@ -45,6 +46,18 @@ def main():
     make_aac(arguments.audio, encoded)
     options = {"model": arguments.model, "language": "en", "device": "cpu", "timestamps": True, "diarization": False}
     header = {"op": "submit", "root": str(root), "id": identifier, "bytes": encoded.stat().st_size, "options": options}
+    if arguments.foreground:
+        header["op"] = "transcribe"
+        with tempfile.TemporaryFile() as wire, encoded.open("rb") as audio:
+            wire.write(json.dumps(header).encode() + b"\n")
+            shutil.copyfileobj(audio, wire, length=65_536); wire.seek(0)
+            result = subprocess.run([sys.executable, str(Path(worker.__file__)), "rpc"], stdin=wire, capture_output=True, timeout=180, check=True)
+        status = json.loads(result.stdout)
+        assert status["state"] == "completed", status
+        text = " ".join(segment["text"].strip() for segment in status["transcript"]["segments"])
+        assert all(word.casefold() in text.casefold() for word in arguments.expected), text
+        print(json.dumps({"passed": True, "foreground": True, "model": arguments.model, "device": "cpu", "job": identifier, "transcript": text}, ensure_ascii=False))
+        return
     children = []
     original_spawn = worker.spawn_detached
 

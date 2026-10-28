@@ -4,11 +4,12 @@ import QuartzCore
 /// A native menu-bar control, with no display link or idle animation.
 @MainActor
 public final class DictationIndicator: NSView {
+    public static let preferredSize = NSSize(width: 58, height: 24)
     public enum Phase { case idle, preparing, listening, processing }
     public private(set) var phase = Phase.idle
     private let capsule = CALayer()
     private var bars: [CALayer] = []
-    private let heights: [CGFloat] = [6, 9, 11, 10, 7, 5]
+    private let heights: [CGFloat] = [5, 7.5, 9, 8, 6, 4.5]
     public var reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
         didSet { applyPhase() }
     }
@@ -32,7 +33,7 @@ public final class DictationIndicator: NSView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         capsule.frame = bounds.insetBy(dx: 1, dy: 1)
         capsule.cornerRadius = capsule.bounds.height / 2
-        let width: CGFloat = 2.5, gap: CGFloat = 2.5
+        let width: CGFloat = 2, gap: CGFloat = 1.8
         let total = CGFloat(bars.count) * width + CGFloat(bars.count - 1) * gap
         for (index, bar) in bars.enumerated() {
             let height = heights[index]
@@ -63,14 +64,14 @@ public final class DictationIndicator: NSView {
         }
     }
     public func setLevel(_ value: Float) {
-        guard phase == .listening else { return }
+        guard phase == .listening, !reduceMotion else { return }
         let level = CGFloat(max(0, min(1, value)))
         CATransaction.begin()
         CATransaction.setDisableActions(reduceMotion)
         CATransaction.setAnimationDuration(0.09)
         for (index, bar) in bars.enumerated() {
             let shape = CGFloat([0.5, 0.8, 1, 0.9, 0.65, 0.4][index])
-            bar.transform = CATransform3DMakeScale(1, 0.6 + level * shape * 0.9, 1)
+            bar.transform = CATransform3DMakeScale(1, 0.5 + level * shape * 0.8, 1)
         }
         CATransaction.commit()
     }

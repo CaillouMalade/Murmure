@@ -80,6 +80,27 @@ final class WorkflowTests: XCTestCase {
         let recovered = JobRepository.recovered(job)
         XCTAssertEqual(recovered.state, .completed); XCTAssertEqual(recovered.summary?.state, .interrupted)
     }
+    func testBlockedStdinAndInheritedPipesStayBounded() async throws {
+        let root = try temporaryDirectory(), script = root.appendingPathComponent("Blocked CLI")
+        try "#!/bin/sh\nexec /bin/sleep 10\n".write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+        do {
+            _ = try await ProcessRunner.run(executable: script, arguments: [], header: Data(repeating: 65, count: 1_048_576), timeout: 0.15)
+            XCTFail("Expected a timeout even while stdin is blocked")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("timed out")) }
+        // A wrapper exiting must not keep Murmure waiting on an inherited pipe.
+        try "#!/bin/sh\n/bin/sleep 2 &\nprintf '# Summary\\n'\n".write(to: script, atomically: true, encoding: .utf8)
+        let start = Date()
+        let data = try await ProcessRunner.run(executable: script, arguments: [], timeout: 0.3)
+        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("# Summary"))
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.5)
+    }
+    func testExcessiveCommandOutputIsStopped() async throws {
+        do {
+            _ = try await ProcessRunner.run(executable: URL(fileURLWithPath: "/usr/bin/yes"), arguments: ["fixture"], timeout: 5)
+            XCTFail("Expected an output limit")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("output limit")) }
+    }
     func testCommandURLsHaveNoArbitraryPayload() throws {
         XCTAssertEqual(DictationCommand.parse(try XCTUnwrap(URL(string: "murmure://dictation/toggle"))), .toggle)
         XCTAssertEqual(DictationCommand.parse(try XCTUnwrap(URL(string: "murmure://dictation/start"))), .start)

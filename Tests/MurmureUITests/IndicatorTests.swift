@@ -6,7 +6,7 @@ import XCTest
 final class IndicatorTests: XCTestCase {
     func testAnimationStopsAndReduceMotionIsStatic() async throws {
         await MainActor.run {
-            let view = DictationIndicator(frame: NSRect(x: 0, y: 0, width: 70, height: 24))
+            let view = DictationIndicator(frame: NSRect(origin: .zero, size: DictationIndicator.preferredSize))
             view.reduceMotion = false; view.setPhase(.processing)
             XCTAssertTrue(view.hasActiveAnimations)
             view.setPhase(.idle); XCTAssertFalse(view.hasActiveAnimations)
@@ -19,11 +19,11 @@ final class IndicatorTests: XCTestCase {
             guard let directory = ProcessInfo.processInfo.environment["MURMURE_SNAPSHOT_DIR"] else { return }
             let root = URL(fileURLWithPath: directory)
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-            let view = DictationIndicator(frame: NSRect(x: 0, y: 0, width: 70, height: 24))
+            let view = DictationIndicator(frame: NSRect(origin: .zero, size: DictationIndicator.preferredSize))
             view.reduceMotion = true; view.needsLayout = true; view.layoutSubtreeIfNeeded()
             for (name, phase) in [("listening", DictationIndicator.Phase.listening), ("processing", .processing)] {
                 view.setPhase(phase); view.setLevel(0.65)
-                let width = 420, height = 144
+                let width = Int(view.bounds.width * 6), height = Int(view.bounds.height * 6)
                 let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
                                         space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
                 context.scaleBy(x: 6, y: 6)

@@ -45,7 +45,7 @@ public enum AgentInvocation {
     public static func arguments(provider: SummaryProvider) -> [String] {
         switch provider {
         case .codex:
-            return ["--ask-for-approval", "never", "exec", "--ignore-user-config", "--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only", "-c", "web_search=\"disabled\"", "--color", "never", "-"]
+            return ["--ask-for-approval", "never", "exec", "--ignore-user-config", "--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only", "-c", "web_search=\"disabled\"", "-c", "features.shell_tool=false", "-c", "features.apps=false", "-c", "features.plugins=false", "-c", "features.hooks=false", "-c", "agents.enabled=false", "--color", "never", "-"]
         case .claude:
             return ["--safe-mode", "--print", "--output-format", "json", "--no-session-persistence", "--tools", "", "--disallowedTools", "*", "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}", "--permission-mode", "dontAsk", "Summarize the source and follow the user's output template supplied on stdin. Return only Markdown."]
         }

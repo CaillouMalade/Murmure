@@ -10,7 +10,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var jobs: [RecordingJob] = []
     private let recorder = AudioRecorder()
     private var dictation: DictationController!
-    private let indicator = DictationIndicator(frame: NSRect(x: 0, y: 0, width: 70, height: 24))
+    private let indicator = DictationIndicator(frame: NSRect(origin: .zero, size: DictationIndicator.preferredSize))
     private let shortcut = GlobalShortcut()
     private var shortcutDown = false
     private var recordingID: String?
@@ -118,9 +118,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func updateIndicator() {
         guard let button = statusItem?.button else { return }
         if dictation?.isActive == true {
-            statusItem.length = 72; button.image = nil
+            statusItem.length = DictationIndicator.preferredSize.width + 2; button.image = nil
             if indicator.superview == nil { button.addSubview(indicator) }
-            indicator.frame = NSRect(x: 1, y: (button.bounds.height - 24) / 2, width: 70, height: 24)
+            indicator.frame = NSRect(origin: NSPoint(x: 1, y: (button.bounds.height - DictationIndicator.preferredSize.height) / 2), size: DictationIndicator.preferredSize)
             indicator.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
             button.toolTip = dictation.phase == .listening ? "Dictating. Release the shortcut or click to finish. Right-click to cancel." : "Processing dictation. Right-click to cancel."
             button.setAccessibilityLabel(dictation.phase == .listening ? "Murmure is listening" : "Murmure is processing dictation")
