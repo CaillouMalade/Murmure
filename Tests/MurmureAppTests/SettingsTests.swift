@@ -10,7 +10,7 @@ final class SettingsTests: XCTestCase {
             let controller = SettingsWindow(settings: AppSettings(), localRoot: URL(fileURLWithPath: "/tmp/Murmure-test-local")) { _ in }
             let window = try XCTUnwrap(controller.window), content = try XCTUnwrap(window.contentView)
             defer { window.close() }
-            func findTabs(_ view: NSView) -> NSTabView? {
+            @MainActor func findTabs(_ view: NSView) -> NSTabView? {
                 if let tabs = view as? NSTabView { return tabs }
                 for child in view.subviews { if let tabs = findTabs(child) { return tabs } }
                 return nil
@@ -21,6 +21,14 @@ final class SettingsTests: XCTestCase {
                 tabs.selectTabViewItem(at: index); content.layoutSubtreeIfNeeded()
                 let scroll = try XCTUnwrap(tabs.selectedTabViewItem?.view as? NSScrollView)
                 XCTAssertGreaterThan(scroll.bounds.width, 400); XCTAssertTrue(scroll.hasVerticalScroller)
+                @MainActor func checkGrids(_ view: NSView) {
+                    if let grid = view as? NSGridView {
+                        XCTAssertEqual(grid.column(at: 0).width, 160)
+                        XCTAssertGreaterThan(grid.cell(atColumnIndex: 1, rowIndex: 0).contentView?.frame.width ?? 0, 250)
+                    }
+                    for child in view.subviews { checkGrids(child) }
+                }
+                if let document = scroll.documentView { checkGrids(document) }
                 if let directory = ProcessInfo.processInfo.environment["MURMURE_SNAPSHOT_DIR"] {
                     let bitmap = try XCTUnwrap(content.bitmapImageRepForCachingDisplay(in: content.bounds))
                     content.cacheDisplay(in: content.bounds, to: bitmap)

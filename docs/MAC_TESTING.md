@@ -13,3 +13,18 @@ These checks have not yet been performed on Arthur's Mac. CI compilation is a se
 9. Configure local Python, disable the remote computer and explicitly choose local processing. Confirm there is no automatic fallback and no idle model process afterwards. Check new local worker files are under LocalWorker, original recordings stay under Recordings, and v1 local jobs still resolve their original paths.
 10. Quit/reopen with queued and failed jobs. Confirm their states and original audio are retained. Test quitting during recording and during an upload: the app should ask you to finish those operations first.
 11. In Activity Monitor, measure idle CPU, memory and Energy Impact for at least ten minutes with no menu open, then during recording/uploading/local inference. Repeat while disconnected. There should be no repeated SSH child processes or periodic network/disk activity at idle. Record measurements and Mac/OS details; no fixed memory or battery promise is established yet.
+
+## V0.3 dictation and Markdown workflow
+
+These require a real macOS 15+ session. Native rendering/build checks do not establish live input or permissions.
+
+- Update the SSH worker to v0.3.0. Use a verified host and the worker venv; record a short phrase, release Control + Option + Space and confirm one insertion at the captured cursor. Try hold, toggle, a custom chord and the background URL commands.
+- On the first permission request, confirm no recording/insertion occurs until returning to the text field and invoking again. Normal recording should not request Accessibility/Speech Recognition.
+- Check a native text field and a browser/editor field, accented French, punctuation and emoji. No words should appear while speaking, no Return/Send should fire, and any selected text should be replaced once.
+- Move the cursor, change field/app, edit the target or focus a password box while processing. The old target must not receive text; the saved result must remain available to copy. For a Unicode fallback, inspect the actual field because delivery is not confirmed by accessibility.
+- Cancel while listening, starting and processing. Releasing a very quick hold during startup must not leave the mic recording. A cancelled/failed/restarted session must never insert later.
+- Verify the black six-bar capsule against the supplied reference in light/dark menu bars and on a notched display. Check the meter, processing wave, Reduce Motion and the return to a static idle icon. Measure idle CPU/wakeups/memory/energy separately.
+- Select on-device dictation and a supported language; test with networking unavailable. An unavailable local language must fail clearly without silently using a server. Then switch back to SSH; an unavailable/busy remote must fail without launching local inference.
+- Choose a Markdown output folder with spaces and confirm `.md` transcripts, timestamps/speakers, retry after export failure and preservation of an edited existing note. Quick dictation should not create an output-folder note automatically.
+- Configure an already signed-in recent Codex/Claude CLI. Check version, manually summarize a synthetic/public transcript and verify the custom template and adjacent `*.summary.md`. Test signed-out/error cases. Turn automatic handoff on for a new recording, off while another summary is queued, and cancel/restart without automatic resending. Original transcripts must remain intact.
+

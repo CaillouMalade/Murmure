@@ -2,6 +2,17 @@
 
 Versions use SemVer. The first two development milestones are 0.1.0 (v1) and 0.2.0 (reviewed v2); neither is a claim of production readiness.
 
+## 0.3.0 — 2026-10-28
+
+- Add configurable hold/toggle dictation shortcuts and `murmure://dictation` start/stop/toggle/cancel commands, with SSH selected by default.
+- Match the supplied black capsule/six-white-bar reference using native layers, microphone levels while recording, a processing wave and static Reduce Motion behavior. No idle animation or meter.
+- Insert only after transcription, preserve the captured field/selection, reject secure/changed targets and keep recovery text available for Copy. Clipboard copying is optional and off by default; no Send/Return action.
+- Add an SSH foreground dictation operation that fails fast if the model is busy, plus explicitly selected Apple on-device recognition without cloud fallback.
+- Export recording transcripts as Markdown to the chosen folder, preserve older notes and save summaries as separate Markdown files.
+- Add Codex/Claude Code executable setup, editable summary templates, optional automatic handoff for new recordings, serial execution and cancellation/manual recovery. Preserve existing CLI login; never put transcripts in shell commands.
+- Bound CLI input/output, cancellation and timeout behavior, including blocked pipes and inherited descriptors; reject Claude error envelopes instead of treating them as summaries.
+- Add preference-upgrade, CLI-fixture, worker foreground and native rendering checks. Real Mac cursor/shortcut/permission/energy checks and real provider CLI calls remain unverified.
+
 ## 0.2.0 — 2026-10-27
 
 - Address COS's [v1 review](docs/REVIEW_V1.md) without expanding the product scope.

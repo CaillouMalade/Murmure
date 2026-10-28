@@ -1,12 +1,12 @@
 # Murmure
 
-A small native macOS menu-bar recorder that sends saved audio to a transcription worker over SSH. The name is provisional.
+A small native macOS menu-bar recorder and dictation utility. Transcription runs over SSH by default; the name is provisional.
 
 Click the menu-bar icon to record; it turns red. Click again to stop, save the audio and submit it. Right-click for an audio-source dropdown, timestamps, speaker labels, saved transcripts and Settings. There is no audio player.
 
-Transcripts are kept as JSON and plain text beside the recording, exported as text to `~/Documents/Murmure` (or your chosen folder), and open in a small window with a Copy button. Recordings are retained; this version does not automatically delete them.
+Recording transcripts are saved as JSON and Markdown beside the audio, exported as `.md` to `~/Documents/Murmure` or your chosen folder, and open in a small window with Copy. Optional Codex/Claude Code summaries are separate Markdown files beside the exported transcript. Existing notes are never overwritten. Recordings are retained; this version does not automatically delete them.
 
-## Development build: 0.2.0
+## Development build: 0.3.0
 
 Requires macOS 15 or later. The app is native Swift/AppKit with no third-party app dependencies. The optional Python/model environment is separate and can live entirely on the remote computer. No model is loaded by the menu-bar app at idle.
 
@@ -18,7 +18,7 @@ bash scripts/build-app.sh
 open dist/Murmure.app
 ```
 
-The script builds both Apple Silicon and Intel binaries and packages `dist/Murmure-0.2.0-macOS.zip`. It does not install models, modify SSH, sign or notarize the app. V1 is preserved at tag `v0.1.0`; v2 follows COS's [recorded review](docs/REVIEW_V1.md), with a separate `v0.2.0` tag after verification.
+The script builds both Apple Silicon and Intel binaries and packages `dist/Murmure-0.3.0-macOS.zip`. It does not install models, modify SSH, sign or notarize the app. Tags `v0.1.0` and `v0.2.0` preserve the earlier milestones, including COS's [recorded review](docs/REVIEW_V1.md). V0.3.0 adds the requested dictation and Markdown/agent workflow; [scope and sources](docs/V0.3_SCOPE.md) distinguish the reference behavior from native checks still needed.
 
 ## Set up the processing computer
 
@@ -60,11 +60,40 @@ Connect in Terminal once and verify the host fingerprint yourself. Murmure uses 
 
 In Murmure Settings, enter your SSH alias, the remote Python executable, and the full remote worker script path. Windows example: `C:/Murmure/.venv/Scripts/python.exe` and `C:/Murmure/worker/murmure_worker.py`. Linux example: `/home/you/Murmure/.venv/bin/python` and `/home/you/Murmure/worker/murmure_worker.py`. Keep these two paths free of spaces and shell punctuation. Use an explicit venv path, rather than a Windows Store `python3` alias. **Test SSH connection** distinguishes missing worker dependencies from a successful connection, but it does not load or verify model weights. Then choose **Save**.
 
-On Windows, the worker requests `CREATE_BREAKAWAY_FROM_JOB` so a job can survive the SSH session closing. Current OpenSSH supports explicitly requested breakaway, but an administrator/embedding host may forbid it; in that case Murmure fails clearly and keeps the recording. It never changes that policy or installs a scheduled task. Update the remote worker to 0.2.0 as well as the Mac app. The controlled Windows lifetime tests pass; a real Mac-to-G14 SSH/model test remains part of setup.
+On Windows, deferred recording jobs request `CREATE_BREAKAWAY_FROM_JOB` so they can survive the SSH session closing. An administrator/embedding host may forbid it; in that case Murmure fails clearly and keeps the recording. It never changes that policy or installs a scheduled task. Update the remote worker to **0.3.0** as well as the Mac app: quick dictation needs the new foreground operation. Controlled Windows lifetime tests pass; a real Mac-to-G14 SSH/model test remains part of setup.
 
 ## Local fallback
 
 To process on your Mac, create a local Python environment with the same worker requirements and put its full Python path in Settings. Select **Process on this Mac…** for a recording. Local inference is CPU/int8, is never started automatically after an SSH failure, and can use noticeable memory and battery. Diarization also requires the local diarization dependencies and model access. The app itself still contains no model runtime. New local worker jobs have their own folder at `~/Library/Application Support/Murmure/LocalWorker`, including a separate audio copy. Existing v1 local jobs remain readable in their old location; no recordings are moved or deleted during the upgrade.
+
+## Quick dictation
+
+The default shortcut is **Control + Option + Space**, held while speaking. Release it to finish. Under **Settings → Dictation**, record another key combination, choose hold or toggle, and select **SSH** (default) or **On this Mac**. A right-click menu action can also start/finish/cancel dictation. The menu bar becomes a small black capsule with six white bars: microphone levels while listening, a gentle travelling wave while processing. Reduce Motion uses static bars. There is no live text preview and no animation or meter timer at idle.
+
+After processing, Murmure replaces the original text selection or inserts at the captured cursor. It does not press Return or Send. Accessibility permission is needed for this action; normal recording does not need it. The original app, field, selection and readable text must remain unchanged. If they change, or a password field is focused, Murmure keeps the result for Copy instead. Editors without an accessible cursor cannot be targeted. Some editors need Unicode key events instead of an accessibility edit; the history records when delivery could not be confirmed, so check the field before copying it again.
+
+The first permission request may change focus; Murmure asks you to return to your field and invoke the shortcut again before recording. **Also copy finished dictation to the clipboard** is a separate option, off by default. Otherwise the clipboard is untouched. Dictation results/audio remain in internal history for recovery; utterances do not automatically create notes in the output folder or invoke a CLI summary. A failed/interrupted dictation can be transcribed manually from history; it will never insert later into a stale target after restart.
+
+SSH dictation uploads after stopping, waits on that one connection for the result (up to three minutes), and closes it. It fails promptly when another job holds the worker's model lock. There is no silent local fallback or model kept loaded between utterances. Cold model loading and SSH startup affect response time; choose a smaller model or a supported GPU for faster remote results. Local dictation uses Apple's on-device speech recognition for the selected language, without installing Whisper. If the language/model is unavailable locally, it reports an error instead of sending audio to Apple's servers. Speech Recognition permission is requested only for that local choice.
+
+The command interface uses the registered URL scheme. From a Mac terminal or shortcut, use background opening to keep the target app focused:
+
+```bash
+open -g 'murmure://dictation/start'
+open -g 'murmure://dictation/stop'
+open -g 'murmure://dictation/toggle'
+open -g 'murmure://dictation/cancel'
+```
+
+## Markdown and agent summaries
+
+Choose the destination under **Settings → Recordings → Markdown folder**. Each recording gets a dated, uniquely named `.md` note, with optional timestamps and speaker labels. The internal transcript survives an export failure; **Export Markdown** can retry. Older text transcripts remain readable and can be exported as Markdown. Audio stays in Application Support, not in the selected notes folder.
+
+Under **Settings → Summaries**, select Codex CLI or Claude Code, choose its executable and edit the output template. Use an existing installation signed in through its normal terminal flow. `command -v codex` or `command -v claude` identifies the path on the Mac; choose that file in Settings. **Check CLI version** verifies only the executable, not account login or provider access. Recent CLI versions supporting the documented flags are required.
+
+**Automatically summarize new recordings** starts off. You can first use **Summarize with …** on one completed recording. When enabled, a new recording remembers the provider/template at capture time and is summarized after transcription. Turning the option off prevents pending automatic handoffs. One summary command runs at a time, and a queued/running summary can be cancelled from its history menu. Interrupted jobs require a manual retry and are never silently resent. Provider use follows the selected CLI account's normal usage and billing; Murmure stores no provider credentials.
+
+The app sends the transcript and template through stdin without a shell and captures the final Markdown in a separate `*.summary.md` file; the original transcript is preserved. The command uses a fresh temporary working directory, with Codex in read-only mode and shell/web/apps/plugins/user hooks disabled, or Claude in safe print mode with tools disabled. Existing login and managed policies still apply. Errors and missing login appear on the job instead of becoming a fake summary. No provider inference was run during development: executable fixtures verify argument/stdin handling and Markdown/error parsing.
 
 ## Permissions and audio
 
