@@ -79,6 +79,15 @@ final class WorkflowTests: XCTestCase {
         job.summary = SummaryRecord(state: .running, provider: .codex)
         let recovered = JobRepository.recovered(job)
         XCTAssertEqual(recovered.state, .completed); XCTAssertEqual(recovered.summary?.state, .interrupted)
+        job.summary?.state = .queued
+        XCTAssertEqual(JobRepository.recovered(job).summary?.state, .interrupted)
+    }
+    func testInterruptedDictationKeepsRecoveryManual() {
+        var job = RecordingJob(source: .microphone, options: TranscriptionOptions())
+        job.kind = .dictation; job.state = .preparing
+        let recovered = JobRepository.recovered(job)
+        XCTAssertEqual(recovered.state, .interrupted)
+        XCTAssertTrue(recovered.message?.contains("automatic insertion will not resume") == true)
     }
     func testBlockedStdinAndInheritedPipesStayBounded() async throws {
         let root = try temporaryDirectory(), script = root.appendingPathComponent("Blocked CLI")

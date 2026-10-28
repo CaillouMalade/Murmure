@@ -33,6 +33,8 @@ public final class JobRepository {
             recovered.summary?.error = "Summarization was interrupted. The original transcript is kept; retry manually."
         }
         switch job.state {
+        case .preparing where job.effectiveKind == .dictation:
+            recovered.state = .interrupted; recovered.message = "Dictation was interrupted while processing. Saved audio can be transcribed manually; automatic insertion will not resume."
         case .recording, .preparing:
             recovered.state = .interrupted; recovered.message = "Recording stopped before audio was finalized. Original capture files are kept in its folder."
         case .uploading:
