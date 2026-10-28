@@ -4,7 +4,7 @@ Murmure is an experimental macOS 15+ menu-bar recorder and dictation app. Its sc
 
 ## Current work
 
-Version 0.4.1 packages the existing 0.4.0 app behavior for publication: MIT licence, public documentation, a checked release pipeline and matching app/worker downloads. A tag creates a draft prerelease only after both CI jobs pass. Publishing the draft and changing repository visibility are separate manual steps. Existing tags and history stay intact.
+Version 0.4.2 packages the existing 0.4.0 app behavior for publication: MIT licence, public documentation, a checked release pipeline and matching app/worker downloads. A tag creates a draft prerelease only after both CI jobs pass. Publishing the draft and changing repository visibility are separate manual steps. Existing tags and history stay intact. Version 0.4.1 remains a source milestone: its app build passed, but downloaded-artifact inspection found a release-path mismatch, corrected in 0.4.2 before publication.
 
 ## Verification
 

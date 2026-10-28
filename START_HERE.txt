@@ -1,14 +1,14 @@
-Murmure 0.4.1 — experimental prerelease, macOS 15 or later
+Murmure 0.4.2 — experimental prerelease, macOS 15 or later
 
 ON THE MAC
-1. Unzip Murmure-0.4.1-macOS.zip and move Murmure.app to Applications.
+1. Unzip Murmure-0.4.2-macOS.zip and move Murmure.app to Applications.
    This build is unsigned and not notarized. If macOS blocks it, review the
    app under System Settings > Privacy & Security before opening it.
 2. The app opens Setup on a fresh install. It records only when you start it.
    The Mac needs no Python or Whisper model when transcription uses SSH.
 
 ON THE PROCESSING COMPUTER
-3. Extract Murmure-0.4.1-worker.zip to a permanent folder without spaces,
+3. Extract Murmure-0.4.2-worker.zip to a permanent folder without spaces,
    e.g. C:/Murmure on Windows. The ZIP contains a folder named Murmure-worker;
    use that folder itself as your permanent worker folder.
 4. Install Python 3.12 on Windows (3.11/3.12 on Mac/Linux).

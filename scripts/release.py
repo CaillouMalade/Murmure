@@ -166,7 +166,7 @@ Live Mac capture, permissions, shortcut/editor input, real SSH, GPU/diarization,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check", "worker", "prepare"))
+    parser.add_argument("command", choices=("check", "worker", "archives", "prepare"))
     parser.add_argument("--output", type=Path, default=ROOT / "dist")
     parser.add_argument("--tag")
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", "CaillouMalade/Murmure"))
@@ -176,6 +176,10 @@ def main():
         print(f"Version, changelog and local links passed: {check_source(ROOT, args.tag)}")
     elif args.command == "worker":
         print(package_worker(ROOT, args.output))
+    elif args.command == "archives":
+        version = check_source(ROOT, args.tag)
+        check_archives(ROOT, args.output, version)
+        print(f"App, worker and guide match source: {version}")
     else:
         if not args.tag or not args.run_url:
             parser.error("prepare requires --tag and --run-url")

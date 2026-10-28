@@ -2,6 +2,12 @@
 
 Versions use SemVer. All current 0.x builds are experimental. Tags are immutable; published downloads are never replaced in place.
 
+## 0.4.2 — 2026-10-28
+
+- Keep app/worker archives and the first-run guide together in the build artifact so the release workflow can consume them directly.
+- Validate actual archive contents before uploading build artifacts, as well as before creating a release draft.
+- Preserve v0.4.1 as an unpublished source milestone; no release assets or tags are replaced. App behavior is unchanged from v0.4.0.
+
 ## 0.4.1 — 2026-10-28
 
 - Add the MIT licence and public installation, usage, development and release documentation.

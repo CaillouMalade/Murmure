@@ -1,6 +1,6 @@
 # Releasing Murmure
 
-Use immutable `vMAJOR.MINOR.PATCH` tags. While the app is experimental, releases are marked **prerelease**. Never move an existing tag or replace published assets; fix mistakes in a new version. Earlier v0.1.0–v0.4.0 tags remain development milestones, not retroactively rebuilt releases.
+Use immutable `vMAJOR.MINOR.PATCH` tags. While the app is experimental, releases are marked **prerelease**. Never move an existing tag or replace published assets; fix mistakes in a new version. Earlier v0.1.0–v0.4.1 tags remain development milestones, not retroactively rebuilt releases.
 
 ## Prepare a version
 
@@ -10,8 +10,8 @@ Use immutable `vMAJOR.MINOR.PATCH` tags. While the app is experimental, releases
 4. Tag that exact commit and push it:
 
 ```bash
-git tag -a v0.4.1 -m "Murmure 0.4.1"
-git push origin v0.4.1
+git tag -a v0.4.2 -m "Murmure 0.4.2"
+git push origin v0.4.2
 ```
 
 Use the new version in these commands on subsequent releases. The version checker requires an exact tag match; do not reuse a milestone tag.

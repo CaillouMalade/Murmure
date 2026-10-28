@@ -93,6 +93,8 @@ jobs:
           if-no-files-found: error
       - name: Build universal Mac app
         run: bash scripts/build-app.sh
+      - name: Validate final app and worker archives against source
+        run: python3 scripts/release.py archives
       - name: Inspect packaged executable
         run: |
           lipo -archs dist/Murmure.app/Contents/MacOS/Murmure
@@ -104,6 +106,6 @@ jobs:
           path: |
             dist/Murmure-*-macOS.zip
             dist/Murmure-*-worker.zip
-            START_HERE.txt
+            dist/START_HERE.txt
           if-no-files-found: error
           retention-days: 30
