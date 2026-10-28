@@ -23,9 +23,16 @@ final class TranscriptWindow: NSWindowController {
         if let content = window.contentView {
             content.addSubview(scroll); content.addSubview(buttons)
             if let notice, !notice.isEmpty {
-                let label = NSTextField(wrappingLabelWithString: notice); label.textColor = .secondaryLabelColor
-                label.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(label)
-                NSLayoutConstraint.activate([label.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), label.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), label.topAnchor.constraint(equalTo: content.topAnchor, constant: 14), scroll.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 8)])
+                let label = NSTextField(wrappingLabelWithString: notice); label.textColor = .labelColor; label.font = .systemFont(ofSize: 12)
+                let banner = NSBox(); banner.boxType = .custom; banner.borderType = .noBorder; banner.fillColor = .controlBackgroundColor
+                banner.contentViewMargins = .zero
+                label.translatesAutoresizingMaskIntoConstraints = false; banner.translatesAutoresizingMaskIntoConstraints = false
+                content.addSubview(banner)
+                if let bannerContent = banner.contentView {
+                    bannerContent.addSubview(label)
+                    NSLayoutConstraint.activate([label.leadingAnchor.constraint(equalTo: bannerContent.leadingAnchor, constant: 16), label.trailingAnchor.constraint(equalTo: bannerContent.trailingAnchor, constant: -16), label.topAnchor.constraint(equalTo: bannerContent.topAnchor, constant: 10), label.bottomAnchor.constraint(equalTo: bannerContent.bottomAnchor, constant: -10)])
+                }
+                NSLayoutConstraint.activate([banner.leadingAnchor.constraint(equalTo: content.leadingAnchor), banner.trailingAnchor.constraint(equalTo: content.trailingAnchor), banner.topAnchor.constraint(equalTo: content.topAnchor), scroll.topAnchor.constraint(equalTo: banner.bottomAnchor, constant: 8)])
             } else { scroll.topAnchor.constraint(equalTo: content.topAnchor).isActive = true }
             NSLayoutConstraint.activate([scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor), scroll.bottomAnchor.constraint(equalTo: buttons.topAnchor, constant: -12), buttons.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), buttons.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), buttons.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -12)])
         }
