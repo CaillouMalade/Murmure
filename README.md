@@ -1,6 +1,6 @@
 # Murmure
 
-A small native macOS menu-bar app for recording and dictation, with transcription on your own computer over SSH.
+A small native macOS menu-bar app for recording and dictation, with transcription on your own computer locally or over SSH.
 
 [Download a release](https://github.com/CaillouMalade/Murmure/releases) · [Setup](docs/SETUP.md) · [Usage](docs/USAGE.md) · [Changelog](CHANGELOG.md)
 
