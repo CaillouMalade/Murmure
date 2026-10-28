@@ -12,6 +12,8 @@ with (app / "Contents/Info.plist").open("rb") as handle:
 assert info["LSUIElement"] is True
 assert info["NSMicrophoneUsageDescription"]
 assert info["NSScreenCaptureUsageDescription"]
+assert info["NSSpeechRecognitionUsageDescription"]
+assert any("murmure" in item["CFBundleURLSchemes"] for item in info["CFBundleURLTypes"])
 assert (app / "Contents/MacOS/Murmure").is_file()
 worker = app / "Contents/Resources/murmure_worker.py"
 assert worker.is_file()

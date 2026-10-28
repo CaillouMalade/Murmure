@@ -48,7 +48,7 @@ public struct SummarySettings: Codable, Equatable, Sendable {
     public init() {}
     public var executablePath: String { provider == .codex ? codexPath : claudePath }
 }
-public enum SummaryState: String, Codable, Sendable { case running, completed, failed, interrupted }
+public enum SummaryState: String, Codable, Sendable { case queued, running, completed, failed, interrupted }
 public struct SummaryRecord: Codable, Sendable {
     public var state: SummaryState
     public var provider: SummaryProvider

@@ -10,6 +10,7 @@ let package = Package(
         .target(name: "MurmureUI"),
         .executableTarget(name: "Murmure", dependencies: ["MurmureCore", "MurmureUI"]),
         .testTarget(name: "MurmureCoreTests", dependencies: ["MurmureCore"]),
-        .testTarget(name: "MurmureUITests", dependencies: ["MurmureUI"])
+        .testTarget(name: "MurmureUITests", dependencies: ["MurmureUI"]),
+        .testTarget(name: "MurmureAppTests", dependencies: ["Murmure", "MurmureCore"])
     ]
 )

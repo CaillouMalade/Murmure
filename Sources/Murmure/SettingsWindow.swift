@@ -1,6 +1,10 @@
 ﻿import AppKit
 import MurmureCore
 
+private final class SettingsDocumentView: NSView {
+    override var isFlipped: Bool { true }
+}
+
 @MainActor
 final class SettingsWindow: NSWindowController, NSWindowDelegate {
     private var settings: AppSettings
@@ -83,12 +87,15 @@ final class SettingsWindow: NSWindowController, NSWindowDelegate {
     }
     private func addTab(_ title: String, to tabs: NSTabView, views: [NSView]) {
         let item = NSTabViewItem(identifier: title); item.label = title
-        let content = NSView(), stack = NSStackView(views: views)
+        let content = SettingsDocumentView(), stack = NSStackView(views: views)
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 14; stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20), stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20), stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 20), stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -16)])
+        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20), stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20), stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 20), stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16)])
         for view in views { view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
-        item.view = content; tabs.addTabViewItem(item)
+        let scroll = NSScrollView(); scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
+        content.translatesAutoresizingMaskIntoConstraints = false; scroll.documentView = content
+        content.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
+        item.view = scroll; tabs.addTabViewItem(item)
     }
     private func draft() -> AppSettings {
         var value = settings

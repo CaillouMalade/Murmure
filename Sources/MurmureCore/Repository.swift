@@ -28,7 +28,7 @@ public final class JobRepository {
     }
     public static func recovered(_ job: RecordingJob) -> RecordingJob {
         var recovered = job
-        if recovered.summary?.state == .running {
+        if recovered.summary?.state == .running || recovered.summary?.state == .queued {
             recovered.summary?.state = .interrupted
             recovered.summary?.error = "Summarization was interrupted. The original transcript is kept; retry manually."
         }

@@ -18,6 +18,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var checking = false
     private var submissions: Set<String> = []
     private var summaryTasks: [String: Task<Void, Never>] = [:]
+    private var summaryQueue: [(id: String, configuration: SummarySettings, userInitiated: Bool)] = []
     private var settingsWindow: SettingsWindow?
     private var transcriptWindow: TranscriptWindow?
     private var activeMenu: NSMenu?
@@ -73,7 +74,8 @@ final class AppController: NSObject, NSApplicationDelegate {
             return .terminateCancel
         }
         for task in summaryTasks.values { task.cancel() }
-        for var job in jobs where job.summary?.state == .running {
+        summaryQueue.removeAll()
+        for var job in jobs where job.summary?.state == .running || job.summary?.state == .queued {
             job.summary?.state = .interrupted; job.summary?.error = "Summarization stopped when Murmure quit. Retry manually."
             try? persist(job)
         }
@@ -188,7 +190,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func jobTitle(_ job: RecordingJob) -> String {
         let time = DateFormatter.localizedString(from: job.createdAt, dateStyle: .short, timeStyle: .short)
         let duration = job.duration.map { " · \(Transcript.timestamp($0))" } ?? ""
-        let status = job.summary?.state == .running ? "Summarizing…" : (job.hasUnreadSummary ? "Summary ready" : job.state.title)
+        let status = job.summary?.state == .queued ? "Summary queued" : (job.summary?.state == .running ? "Summarizing…" : (job.hasUnreadSummary ? "Summary ready" : job.state.title))
         return "\(job.hasUnreadTranscript || job.hasUnreadSummary ? "New · " : "")\(time) · \(job.effectiveKind == .dictation ? "Dictation" : job.source.title)\(duration) · \(status)"
     }
     private func jobActions(_ job: RecordingJob) -> NSMenu {
@@ -198,7 +200,8 @@ final class AppController: NSObject, NSApplicationDelegate {
             actions.addItem(menuItem("Export Markdown…", action: #selector(exportMarkdown), represented: job.id))
             if job.effectiveKind == .recording {
                 let summarize = menuItem("Summarize with \(settings.summary.provider.title)…", action: #selector(summarizeFromMenu), represented: job.id)
-                summarize.isEnabled = summaryTasks[job.id] == nil; actions.addItem(summarize)
+                summarize.isEnabled = summaryTasks[job.id] == nil && !summaryQueue.contains(where: { $0.id == job.id }); actions.addItem(summarize)
+                if job.summary?.state == .queued || job.summary?.state == .running { actions.addItem(menuItem("Cancel summary", action: #selector(cancelSummary), represented: job.id)) }
             }
             if job.summary?.state == .completed { actions.addItem(menuItem("Open summary…", action: #selector(openSummary), represented: job.id)) }
             if let error = job.summary?.error {
@@ -396,10 +399,23 @@ final class AppController: NSObject, NSApplicationDelegate {
         if let id = item.representedObject as? String { startSummary(id: id, configuration: settings.summary, userInitiated: true) }
     }
     private func startSummary(id: String, configuration: SummarySettings, userInitiated: Bool) {
-        guard summaryTasks[id] == nil else { return }
+        guard summaryTasks[id] == nil, !summaryQueue.contains(where: { $0.id == id }) else { return }
+        if !summaryTasks.isEmpty {
+            summaryQueue.append((id, configuration, userInitiated))
+            if var job = jobs.first(where: { $0.id == id }) {
+                job.summary = SummaryRecord(state: .queued, provider: configuration.provider); try? persist(job)
+            }
+            return
+        }
         summaryTasks[id] = Task { [weak self] in
             guard let self else { return }
-            defer { summaryTasks.removeValue(forKey: id); refreshVisibleMenu() }
+            defer {
+                summaryTasks.removeValue(forKey: id); refreshVisibleMenu()
+                if !summaryQueue.isEmpty {
+                    let next = summaryQueue.removeFirst()
+                    startSummary(id: next.id, configuration: next.configuration, userInitiated: next.userInitiated)
+                }
+            }
             guard var job = jobs.first(where: { $0.id == id }), job.state == .completed, let original = job.exportedTranscriptPath ?? job.transcriptPath else { return }
             do {
                 let source = try String(contentsOfFile: original, encoding: .utf8)
@@ -423,6 +439,13 @@ final class AppController: NSObject, NSApplicationDelegate {
                 }
                 if userInitiated, !(error is CancellationError) { showError(error) }
             }
+        }
+    }
+    @objc private func cancelSummary(_ item: NSMenuItem) {
+        guard let id = item.representedObject as? String else { return }
+        summaryQueue.removeAll { $0.id == id }; summaryTasks[id]?.cancel()
+        if var job = jobs.first(where: { $0.id == id }), job.summary?.state == .queued {
+            job.summary?.state = .interrupted; job.summary?.error = "Summary cancelled. The original transcript is kept."; try? persist(job)
         }
     }
     @objc private func openSummary(_ item: NSMenuItem) {
@@ -453,6 +476,15 @@ final class AppController: NSObject, NSApplicationDelegate {
             do { try shortcut.register(updated.dictation.shortcut, enabled: updated.dictation.enabled) }
             catch { try? shortcut.register(settings.dictation.shortcut, enabled: settings.dictation.enabled); throw error }
             settings = updated; saveSettings()
+            if !updated.summary.automatic {
+                let cancelled = summaryQueue.filter { !$0.userInitiated }
+                summaryQueue.removeAll { !$0.userInitiated }
+                for request in cancelled {
+                    if var job = jobs.first(where: { $0.id == request.id }) {
+                        job.summary?.state = .interrupted; job.summary?.error = "Automatic summarization was turned off before this job started."; try? persist(job)
+                    }
+                }
+            }
         }
         settingsWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
     }
